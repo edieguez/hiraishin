@@ -13,6 +13,12 @@ M.defaults = {
     dir = vim.fn.stdpath("data") .. "/hiraishin",
     debounce_ms = 500,
   },
+  anchor = {
+    search_radius = 50, -- lines searched around the stored line
+    full_scan = true, -- then search the whole file (exact matches only)
+    max_lines = 20000, -- skip the full scan above this size
+    fuzzy_threshold = 0.8, -- whitespace-insensitive similarity, 0..1
+  },
   signs = {
     enabled = true,
     priority = 15,
@@ -85,6 +91,13 @@ local function validate(o)
   check("root.fn", o.root.fn, "function", true)
   check("storage.dir", o.storage.dir, "string")
   check("storage.debounce_ms", o.storage.debounce_ms, "number")
+  check("anchor.search_radius", o.anchor.search_radius, "number")
+  check("anchor.full_scan", o.anchor.full_scan, "boolean")
+  check("anchor.max_lines", o.anchor.max_lines, "number")
+  check("anchor.fuzzy_threshold", o.anchor.fuzzy_threshold, "number")
+  if o.anchor.fuzzy_threshold < 0 or o.anchor.fuzzy_threshold > 1 then
+    error("hiraishin: anchor.fuzzy_threshold: expected a number between 0 and 1", 0)
+  end
   check("signs.enabled", o.signs.enabled, "boolean")
   check("signs.priority", o.signs.priority, "number")
   check("signs.icon", o.signs.icon, "string")

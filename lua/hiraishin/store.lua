@@ -154,6 +154,14 @@ function M.get(ctx)
   if not entry then
     entry = { data = load(ctx.store, ctx.root), dirty = false }
     cache[ctx.store] = entry
+    -- kunai whose file is gone are stale until the file shows up again
+    for _, list in pairs(entry.data.lists) do
+      for _, bm in pairs(list.bookmarks) do
+        if not vim.uv.fs_stat(util.abspath(entry.data.root, bm.file)) then
+          bm.stale = true
+        end
+      end
+    end
   end
   return entry.data
 end

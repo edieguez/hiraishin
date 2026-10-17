@@ -21,12 +21,21 @@ function M.active(data)
 end
 
 ---@param list hiraishin.List
+---@param line_of? fun(bm: hiraishin.Bookmark): integer? live line (default: stored)
 ---@return hiraishin.Bookmark?
-function M.find_at(list, file, line)
+function M.find_at(list, file, line, line_of)
   for _, id in ipairs(list.order) do
     local bm = list.bookmarks[id]
-    if bm.file == file and bm.line == line then
-      return bm
+    if bm.file == file then
+      local l
+      if line_of then
+        l = line_of(bm)
+      else
+        l = bm.line
+      end
+      if l == line then
+        return bm
+      end
     end
   end
 end

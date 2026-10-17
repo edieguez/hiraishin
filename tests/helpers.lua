@@ -55,10 +55,14 @@ function Helpers.new_child()
   ---Sign texts placed by hiraishin in the current buffer: { [line] = text }
   function child.signs()
     return child.lua_get([[(function()
-      local ns = require("hiraishin.signs").ns
+      local signs = require("hiraishin.signs")
       local out = {}
-      for _, m in ipairs(vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })) do
-        out[tostring(m[2] + 1)] = vim.trim(m[4].sign_text or "")
+      for _, ns in ipairs({ signs.ns, signs.stale_ns }) do
+        for _, m in ipairs(vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })) do
+          if m[4].sign_text and not m[4].invalid then
+            out[tostring(m[2] + 1)] = vim.trim(m[4].sign_text)
+          end
+        end
       end
       return out
     end)()]])

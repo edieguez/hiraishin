@@ -3,8 +3,8 @@
 Project-aware bookmarks for Neovim. Place a **kunai** on a line, name it, and
 come back to it across edits, restarts and projects.
 
-> Work in progress — phase 1 of 6 (core + storage). Picker, manager, line
-> tracking and slots are on the way.
+> Work in progress — phase 2 of 6 (core, storage, line tracking). Seals,
+> picker and manager are on the way.
 
 ## Requirements
 
@@ -15,7 +15,7 @@ come back to it across edits, restarts and projects.
 
 ```lua
 {
-  "emmanuel/hiraishin.nvim",
+  "edieguez/hiraishin",
   event = "VeryLazy",
   opts = {},
 }
@@ -32,6 +32,26 @@ come back to it across edits, restarts and projects.
 Removing a kunai that has a name or note asks for confirmation
 (`confirm_remove_named = false` to turn that off).
 
+| Command | Action |
+| --- | --- |
+| `:Hiraishin relocate [name]` | Move a kunai to the cursor line (no name: pick among stale ones) |
+| `:Hiraishin prune` | Remove stale kunai after confirming |
+
+### Kunai stay on their line
+
+- While a file is open, kunai follow your edits. Their new positions are saved
+  when you write the file; `:e!` brings back the saved ones.
+- Deleting a kunai's line makes it **stale** (`!` sign); `u` brings it back,
+  and so does typing or pasting that line again before the next write.
+- When a file changed outside Neovim (`git pull`, `git checkout`, a formatter),
+  kunai are found again from the line text they remember and its neighbours:
+  first near the old line, then in the whole file, then by a fuzzy match for
+  slightly edited lines. Kunai that can't be found are kept as stale, never
+  dropped silently.
+- Renames follow along with `:saveas`, `:file`, oil.nvim, mini.files,
+  neo-tree and nvim-tree. Anything else can call
+  `require("hiraishin").rename(from, to)` (files or directories).
+
 ## Configuration
 
 Defaults:
@@ -46,6 +66,12 @@ require("hiraishin").setup({
   storage = {
     dir = vim.fn.stdpath("data") .. "/hiraishin",
     debounce_ms = 500,
+  },
+  anchor = {
+    search_radius = 50,           -- lines searched around the old position
+    full_scan = true,             -- then the whole file (exact matches)
+    max_lines = 20000,            -- no full scan above this size
+    fuzzy_threshold = 0.8,        -- similarity for slightly edited lines
   },
   signs = {
     enabled = true,
@@ -73,10 +99,17 @@ h.add({ name?, note?, bufnr?, line? })      --> bookmark | nil, err
 h.remove(id_or_name)
 h.update(id_or_name, { name?, note? })      -- false clears a field
 h.get(id_or_name)
-h.list({ bufnr? })
+h.list({ bufnr?, include_stale? })           -- live line numbers
+h.at_cursor()
+h.relocate(id_or_name, { bufnr?, line? })
+h.stale({ all? })                           --> { { bookmark, list }, ... }
+h.prune()
+h.rename(from, to)
 ```
 
-`User` events: `HiraishinAdd`, `HiraishinRemove`, `HiraishinUpdate`.
+`User` events: `HiraishinAdd`, `HiraishinRemove`, `HiraishinUpdate`,
+`HiraishinMoved` (`data.reason`: edit, reanchor, rename, relocate),
+`HiraishinStale`.
 
 ## Development
 

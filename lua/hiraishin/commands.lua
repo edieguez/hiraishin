@@ -76,6 +76,66 @@ M.subcommands = {
     end,
     complete = bookmark_names,
   },
+  relocate = {
+    run = function(args)
+      local h = require("hiraishin")
+      local function relocate(bm)
+        local _, err = h.relocate(bm.id)
+        if err then
+          warn(err)
+        end
+      end
+      if #args > 0 then
+        local _, err = h.relocate(table.concat(args, " "))
+        if err then
+          warn(err)
+        end
+        return
+      end
+      local stale = vim.tbl_map(function(s)
+        return s.bookmark
+      end, h.stale())
+      if #stale == 0 then
+        return warn("no stale kunai; name one to move it here: :Hiraishin relocate {name}")
+      end
+      if #stale == 1 then
+        return relocate(stale[1])
+      end
+      vim.ui.select(stale, {
+        prompt = "Relocate kunai to this line",
+        format_item = function(bm)
+          return string.format("%s  %s:%d  %s", bm.name or "—", bm.file, bm.line, bm.anchor and bm.anchor.text or "")
+        end,
+      }, function(choice)
+        if choice then
+          relocate(choice)
+        end
+      end)
+    end,
+    complete = bookmark_names,
+  },
+  prune = {
+    run = function()
+      local h = require("hiraishin")
+      local stale = h.stale({ all = true })
+      if #stale == 0 then
+        return util.notify("no stale kunai")
+      end
+      local lines = {}
+      for i, s in ipairs(stale) do
+        if i > 10 then
+          table.insert(lines, string.format("  … and %d more", #stale - 10))
+          break
+        end
+        local bm = s.bookmark
+        table.insert(lines, string.format("  %s  %s:%d [%s]", bm.name or "—", bm.file, bm.line, s.list))
+      end
+      local msg = string.format("Remove %d stale kunai?\n%s", #stale, table.concat(lines, "\n"))
+      if vim.fn.confirm(msg, "&Yes\n&No", 2) == 1 then
+        h.prune()
+      end
+    end,
+  },
 }
 
 ---@param cmd { fargs: string[], bang: boolean }

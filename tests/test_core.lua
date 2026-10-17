@@ -103,7 +103,7 @@ T["remove / update"]["frees the slot of a removed bookmark"] = function()
   child.lua(
     [[local s = require("hiraishin.store").get(require("hiraishin.scope").for_buf(0))
       s.lists.default.slots["1"] = ...
-      require("hiraishin.signs").refresh(0)]],
+      require("hiraishin.tracker").render(0 + vim.api.nvim_get_current_buf())]],
     { id }
   )
   eq(child.signs(), { ["1"] = "1" })
@@ -208,7 +208,10 @@ end
 T["commands"]["completes subcommands and names"] = function()
   main_lua(1)
   child.lua([[require("hiraishin").add({ name = "alpha" })]])
-  eq(child.lua_get([[vim.fn.getcompletion("Hiraishin ", "cmdline")]]), { "add", "delete", "toggle" })
+  eq(
+    child.lua_get([[vim.fn.getcompletion("Hiraishin ", "cmdline")]]),
+    { "add", "delete", "prune", "relocate", "toggle" }
+  )
   eq(child.lua_get([[vim.fn.getcompletion("Hiraishin delete a", "cmdline")]]), { "alpha" })
 end
 

@@ -90,36 +90,12 @@ function M.trim(s)
   return s ~= "" and s or nil
 end
 
-local CONTEXT_SCAN = 20
-
----Anchor for a 1-based line: its trimmed text and nearest non-blank neighbours.
+---Anchor for a 1-based buffer line: its trimmed text and nearest non-blank neighbours.
 ---@param bufnr integer
 ---@param line integer
 ---@return { text: string, before: string?, after: string? }
 function M.anchor(bufnr, line)
-  local count = vim.api.nvim_buf_line_count(bufnr)
-  local first = math.max(1, line - CONTEXT_SCAN)
-  local last = math.min(count, line + CONTEXT_SCAN)
-  local lines = vim.api.nvim_buf_get_lines(bufnr, first - 1, last, false)
-  local function at(l)
-    return lines[l - first + 1]
-  end
-  local anchor = { text = vim.trim(at(line) or "") }
-  for l = line - 1, first, -1 do
-    local t = M.trim(at(l))
-    if t then
-      anchor.before = t
-      break
-    end
-  end
-  for l = line + 1, last do
-    local t = M.trim(at(l))
-    if t then
-      anchor.after = t
-      break
-    end
-  end
-  return anchor
+  return require("hiraishin.anchor").capture(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), line)
 end
 
 ---@param msg string
