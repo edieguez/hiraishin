@@ -68,6 +68,21 @@ function M.find_name(list, name, except_id)
   end
 end
 
+---Why a name can't be used, or nil when it can: it must be unique in the
+---list and must not contain "│" (the manager's column separator) or a newline.
+---@param list hiraishin.List
+---@param name string
+---@param except_id? string
+---@return string?
+function M.name_problem(list, name, except_id)
+  if name:find("│", 1, true) or name:find("\n", 1, true) then
+    return "Kunai names can't contain │ or line breaks"
+  end
+  if M.find_name(list, name, except_id) then
+    return string.format("A kunai named '%s' already exists", name)
+  end
+end
+
 ---Bookmarks in manager order, optionally limited to one file.
 ---@param list hiraishin.List
 ---@param file? string

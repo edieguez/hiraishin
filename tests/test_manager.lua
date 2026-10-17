@@ -235,6 +235,32 @@ T["keys"]["<Tab> shows the next list"] = function()
   eq(child.lua_get("vim.api.nvim_win_get_config(0).title[1][1]"):match("bugs") ~= nil, true)
 end
 
+T["apply"]["names and notes may contain | (only │ separates columns)"] = function()
+  main_lua()
+  place(3, "a|b")
+  child.lua([[require("hiraishin").update("a|b", { note = "x | y │ z" })]])
+  child.cmd("Hiraishin manager")
+  eq(shown(), { "- │ a|b  │ src/main.lua:3 │ x | y │ z" })
+  local id = lines()[1]:match("/(%x+)$")
+  set_lines({ "- │ c|d │ src/main.lua:3 │ p|q /" .. id })
+  child.cmd("write")
+  eq(problems(), {})
+  eq(child.lua_get([[require("hiraishin").get("c|d").note]]), "p|q")
+end
+
+T["apply"]["names can't contain │"] = function()
+  main_lua()
+  eq(
+    child.lua_get([[select(2, require("hiraishin").add({ name = "a│b" }))]]),
+    "Kunai names can't contain │ or line breaks"
+  )
+  place(3, "ok")
+  eq(
+    child.lua_get([[select(2, require("hiraishin").update("ok", { name = "x│y" }))]]),
+    "Kunai names can't contain │ or line breaks"
+  )
+end
+
 T["undo"] = MiniTest.new_set()
 
 T["undo"]["brings back toggle, delete, picker and prune removals in order"] = function()

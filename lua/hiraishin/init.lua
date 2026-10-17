@@ -222,8 +222,9 @@ function M.add(opts)
   local list, list_name = list_ops.active(data)
   local name, note = util.trim(opts.name), util.trim(opts.note)
   local existing = list_ops.find_at(list, ctx.file, line, line_fn(ctx))
-  if name and list_ops.find_name(list, name, existing and existing.id) then
-    return nil, string.format("A kunai named '%s' already exists", name)
+  local problem = name and list_ops.name_problem(list, name, existing and existing.id)
+  if problem then
+    return nil, problem
   end
 
   if existing then
@@ -334,8 +335,9 @@ function M.update(key, fields, opts)
   end
   if fields.name ~= nil then
     local name = fields.name and util.trim(fields.name) or nil
-    if name and list_ops.find_name(list, name, bm.id) then
-      return nil, string.format("A kunai named '%s' already exists", name)
+    local problem = name and list_ops.name_problem(list, name, bm.id)
+    if problem then
+      return nil, problem
     end
     bm.name = name
   end

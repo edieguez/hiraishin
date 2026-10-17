@@ -140,7 +140,8 @@ function M.parse_line(text, lnum)
   if not body then
     return nil, "missing kunai id at the end of the line (lines can be moved or deleted, not added)"
   end
-  local fields = vim.split((body:gsub("│", "|")), "|", { plain = true })
+  -- only "│" separates columns: names and notes may contain "|"
+  local fields = vim.split(body, "│", { plain = true })
   if #fields < 3 then
     return nil, "expected: seal │ name │ path:line │ note"
   end
@@ -155,7 +156,7 @@ function M.parse_line(text, lnum)
     name = nil
   end
   local path = vim.trim(fields[3]):gsub("%s+!$", ""):gsub(":%d+$", "")
-  local note = vim.trim(table.concat(vim.list_slice(fields, 4), "|"))
+  local note = vim.trim(table.concat(vim.list_slice(fields, 4), "│"))
   note = note ~= "" and note:gsub(vim.pesc(vim.trim(NEWLINE)), "\n"):gsub(" ?\n ?", "\n") or nil
   return { lnum = lnum, id = id, slot = slot, name = name, file = path, note = note }
 end

@@ -10,6 +10,8 @@
   project/scope has its own, and merges with other Neovim instances
 - `HiraishinMoved` from renames and relocations carries `from_file` and
   `from_path` (documented and tested)
+- Fix: in the manager only `│` separates columns, so names and notes can
+  contain `|`; names can't contain `│` or line breaks
 
 ### UX and UI pass
 - Seals are quick jumps: sealing a bare line makes a kunai just for the seal,

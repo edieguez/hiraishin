@@ -232,8 +232,9 @@ function M.actions.rename(ctx, e, done)
   vim.ui.input({ prompt = "Kunai name: ", default = bm.name or "" }, function(input)
     if input ~= nil then
       local name = util.trim(input)
-      if name and list_ops.find_name(list, name, bm.id) then
-        util.notify(string.format("A kunai named '%s' already exists", name), vim.log.levels.WARN)
+      local problem = name and list_ops.name_problem(list, name, bm.id)
+      if problem then
+        util.notify(problem, vim.log.levels.WARN)
       else
         bm.name = name
         bm.seal_only = name == nil and bm.seal_only or nil
