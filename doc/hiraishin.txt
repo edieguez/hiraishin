@@ -60,8 +60,10 @@ Set only when the key is free. Override per action with `keymaps`
   <leader>ha      place or rename a named kunai                 `add`
   <leader>hn      edit the kunai's note                         `note`
   <leader>hd      remove the kunai on the line                  `delete`
-  <leader>h1..9   seal the line with 1-9                        `assign_slot`
-  <leader>1..9    jump to that seal                             `jump_slot`
+  m1..m9          seal the line with 1-9                        `assign_slot`
+  mm              seal the line with the next free number       `seal_free`
+  g1..g9          go to that seal                               `jump_slot`
+  g<Space>        seal menu                                     `seals`
   <leader>hj      next seal (1 -> 9)                            `next_seal`
   <leader>hk      previous seal                                 `prev_seal`
   ]k  [k          next / previous kunai in the buffer           `next` `prev`
@@ -84,8 +86,13 @@ selected lines (|hiraishin-ranges|).
     keymaps = { next = "]m", prev = "[m", next_list = "]M", prev_list = "[M" }
 <
 
+Anything with a number has no leader; everything else is under <leader>h.
+None of the keys need a modifier or a dead key. m1..m9 take nothing from
+Vim (it can't set digit marks), mm gives up mark m and g1..g9 shadow only
+|g8|. After a jump, CTRL-O goes back.
+
 The nine-key groups take a prefix or false: >lua
-    keymaps = { jump_slot = "<leader>j", assign_slot = false }
+    keymaps = { jump_slot = "<leader>", assign_slot = "<leader>h", seal_free = false }
 <
 ==============================================================================
 4. COMMANDS                                               *hiraishin-commands*
@@ -106,12 +113,18 @@ All commands are subcommands of `:Hiraishin`, with completion.
 :Hiraishin delete [name]                                   *:Hiraishin-delete*
     Remove the kunai on the cursor line, or the one with that name.
 
+:Hiraishin seals                                            *:Hiraishin-seals*
+    The seal menu: seals 1-9 with name, file, line and text. A digit goes
+    to that seal, d + digit (or dd on a line) clears it, q closes.
+
 :Hiraishin note                                              *:Hiraishin-note*
     Edit the note of the line's kunai in a float. :w saves, q closes.
 
-:Hiraishin seal {1-9}                                        *:Hiraishin-seal*
+:Hiraishin seal [1-9]                                        *:Hiraishin-seal*
 :Hiraishin seal clear
-    Seal the cursor line. A seal held by another line moves here.
+    Seal the cursor line. A seal held by another line moves here. Without a
+    number, the lowest free seal (what mm does); a sealed line keeps its
+    seal.
                                                              *hiraishin-seals*
     Seals are quick jumps. Sealing a line without a kunai creates one just
     for the seal; when the seal is cleared or moved away, that kunai goes
@@ -230,7 +243,7 @@ duplicate name, ...) are shown as diagnostics and nothing is applied.
 7. LISTS AND SCOPES                                          *hiraishin-lists*
 
 Lists group kunai, e.g. one per task. Seals belong to a list, so switching
-lists also switches what <leader>1 jumps to. Kunai of other lists keep
+lists also switches what g1 jumps to. Kunai of other lists keep
 following your edits; only the active list is drawn.
 
 Scopes decide where lists are stored:
@@ -375,6 +388,8 @@ Defaults: >lua
     h.list({ bufnr?, include_stale? })
     h.at_cursor()
     h.seal(n)
+    h.seal_free()                     --> bookmark, seal
+    h.seals()                         --> { { seal, name, file, here } }
     h.slot_of(id_or_name)
     h.jump(name_or_seal, { split? })
     h.next({ count?, wrap?, scope? = "buffer"|"list"|"seal" })
@@ -427,7 +442,9 @@ store from any scope.
 12. STATUSLINE                                          *hiraishin-statusline*
 
 `require("hiraishin").status()` returns the sign icon and the number of
-kunai in the buffer, plus the list when it is not "default" ("3 [bug-1234]").
+kunai in the buffer, the list when it is not "default" and the seals in use
+("3 [bug-1234] · #1 2 4"). `require("hiraishin").seals()` gives the seals
+as data, for statuslines of your own.
 For lualine (clicking it opens the picker for the file): >lua
     sections = { lualine_x = { require("hiraishin.integrations.lualine") } }
 <

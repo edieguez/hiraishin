@@ -14,6 +14,8 @@ M.cursor_ns = vim.api.nvim_create_namespace("hiraishin_cursor")
 M.global_ns = vim.api.nvim_create_namespace("hiraishin_global")
 -- the continuation of range kunai in the sign column
 M.range_ns = vim.api.nvim_create_namespace("hiraishin_range")
+-- highlights of the seal menu
+M.menu_ns = vim.api.nvim_create_namespace("hiraishin_seal_menu")
 -- the brief highlight after a jump
 M.flash_ns = vim.api.nvim_create_namespace("hiraishin_flash")
 

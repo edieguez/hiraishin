@@ -169,7 +169,7 @@ M.subcommands = {
     end,
   },
   seal = {
-    -- :Hiraishin seal {1-9} | :Hiraishin seal clear
+    -- :Hiraishin seal [1-9] | :Hiraishin seal clear   (no number: the next free seal)
     run = function(args)
       local h = require("hiraishin")
       if args[1] == "clear" then
@@ -183,10 +183,19 @@ M.subcommands = {
         end
         return ui.info("Seal removed")
       end
+      if not args[1] then
+        return M.seal_free()
+      end
       M.seal(tonumber(args[1]))
     end,
     complete = function()
       return { "1", "2", "3", "4", "5", "6", "7", "8", "9", "clear" }
+    end,
+  },
+  seals = {
+    -- :Hiraishin seals   the seal menu
+    run = function()
+      require("hiraishin.seal_menu").open()
     end,
   },
   note = {
@@ -401,7 +410,7 @@ M.subcommands = {
   },
 }
 
----Seal the cursor line's kunai and say what happened (also used by <leader>h1..9).
+---Seal the cursor line's kunai and say what happened (also used by m1..m9).
 ---@param n integer
 function M.seal(n)
   local bm, err, displaced = require("hiraishin").seal(n)
@@ -413,6 +422,19 @@ function M.seal(n)
   else
     ui.info(string.format("Sealed as %d · %s jumps here", n, ui.hint("jump_slot_" .. n, ":Hiraishin jump " .. n)))
   end
+end
+
+---Seal the cursor line with the next free seal and say which one (mm).
+function M.seal_free()
+  local bm, n, already = require("hiraishin").seal_free()
+  if not bm then
+    return ui.warn(n)
+  end
+  local jump = ui.hint("jump_slot_" .. n, ":Hiraishin jump " .. n)
+  if already then
+    return ui.info(string.format("Already sealed as %d · %s jumps here", n, jump))
+  end
+  ui.info(string.format("Sealed as %d · %s jumps here", n, jump))
 end
 
 ---Choose (or create) a list, showing how many kunai each one has.

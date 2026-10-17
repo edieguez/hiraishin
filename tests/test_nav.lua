@@ -96,7 +96,7 @@ T["seals"]["are quick jumps: a seal-only kunai goes away with its seal"] = funct
   child.cmd("Hiraishin seal 1") -- replaces: line 1 is left without a kunai
   eq(child.signs(), { ["3"] = "1" })
   eq(#child.lua_get([[require("hiraishin").list()]]), 1)
-  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Sealed as 1 · <leader>1 jumps here")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Sealed as 1 · g1 jumps here")
   -- moving a kunai to another seal keeps it
   child.cmd("Hiraishin seal 2")
   eq(child.signs(), { ["3"] = "2" })
@@ -158,7 +158,7 @@ T["seals"]["cycling with no seals says how to make one"] = function()
   main_lua(1)
   eq(
     child.lua_get([[select(2, require("hiraishin").next({ scope = "seal" }))]]),
-    "No seals in this list · <leader>h1 seals this line"
+    "No seals in this list · m1 seals this line"
   )
 end
 
@@ -188,7 +188,7 @@ end
 
 T["jump"]["reports an empty seal or unknown name"] = function()
   main_lua(1)
-  eq(child.lua_get([[select(2, require("hiraishin").jump(5))]]), "Seal 5 is empty · <leader>h5 seals this line")
+  eq(child.lua_get([[select(2, require("hiraishin").jump(5))]]), "Seal 5 is empty · m5 seals this line")
   eq(child.lua_get([[select(2, require("hiraishin").jump("nope"))]]), "No kunai 'nope'")
 end
 
@@ -457,20 +457,25 @@ end
 T["keymaps"] = function()
   child.lua([[vim.g.mapleader = " "; require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 } })]])
   main_lua(3)
-  child.type_keys(" ", "h", "4")
+  child.type_keys("m", "4")
   eq(child.signs(), { ["3"] = "4" })
   child.api.nvim_win_set_cursor(0, { 1, 0 })
-  child.type_keys(" ", "4")
+  child.type_keys("g", "4")
   eq(cursor()[1], 3)
-  for _, lhs in ipairs({ "<leader>hn", "]K", "[K", "<leader>h9", "<leader>9" }) do
+  for _, lhs in ipairs({ "<leader>hn", "]K", "[K", "m9", "g9", "mm", "g<Space>" }) do
     eq(child.lua_get("vim.fn.maparg(..., 'n') ~= ''", { lhs }), true)
   end
+  -- seal keys are not on the leader any more; Vim's own marks still work
+  eq(child.lua_get([[vim.fn.maparg("<leader>3", "n")]]), "")
+  eq(child.lua_get([[vim.fn.maparg("<leader>h3", "n")]]), "")
+  child.type_keys("m", "a", "j", "'", "a") -- on line 3
+  eq(cursor()[1], 3)
   child.lua(
     [[require("hiraishin").setup({ storage = { dir = T.storage }, keymaps = { jump_slot = "<leader>j", assign_slot = false } })]]
   )
   eq(child.lua_get([[vim.fn.maparg("<leader>j3", "n") ~= ""]]), true)
-  eq(child.lua_get([[vim.fn.maparg("<leader>3", "n")]]), "")
-  eq(child.lua_get([[vim.fn.maparg("<leader>h3", "n")]]), "")
+  eq(child.lua_get([[vim.fn.maparg("g3", "n")]]), "")
+  eq(child.lua_get([[vim.fn.maparg("m3", "n")]]), "")
 end
 
 local function cursor_virt()
@@ -553,6 +558,64 @@ T["display"]["notes appear in a hover float"] = function()
   child.lua("vim.api.nvim_win_close(..., true)", { win })
   child.api.nvim_win_set_cursor(0, { 1, 0 })
   eq(child.lua_get([[require("hiraishin.note").hover()]]), vim.NIL)
+end
+
+T["quick seals"] = MiniTest.new_set()
+
+T["quick seals"]["mm seals with the lowest free number"] = function()
+  main_lua(1)
+  child.lua([[require("hiraishin").seal(1)]])
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  child.cmd("Hiraishin seal") -- what mm runs
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Sealed as 2 · g2 jumps here")
+  child.cmd("Hiraishin seal")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Already sealed as 2 · g2 jumps here")
+  eq(child.signs(), { ["1"] = "1", ["3"] = "2" })
+end
+
+T["quick seals"]["mm says when all nine are taken"] = function()
+  child.lua([[local l = {} for i = 1, 12 do l[i] = "line " .. i end
+    vim.fn.writefile(l, T.proj_a .. "/many.txt")]])
+  child.edit(child.T("proj_a") .. "/many.txt", 1)
+  for n = 1, 9 do
+    child.api.nvim_win_set_cursor(0, { n, 0 })
+    child.lua("require('hiraishin').seal(...)", { n })
+  end
+  child.api.nvim_win_set_cursor(0, { 11, 0 })
+  child.lua([[_G.warned = nil; vim.notify = function(m) _G.warned = m end]])
+  child.cmd("Hiraishin seal")
+  eq(child.lua_get("_G.warned"), "All nine seals are taken · g<Space> to free one")
+end
+
+T["quick seals"]["the menu lists seals, jumps and clears"] = function()
+  main_lua(1)
+  child.lua([[require("hiraishin").seal(1)]])
+  other_lua(3)
+  child.lua([[require("hiraishin").add({ name = "gamma" }); require("hiraishin").seal(3)]])
+  main_lua(7)
+  child.cmd("Hiraishin seals")
+  local lines = child.api.nvim_buf_get_lines(0, 0, -1, false)
+  eq(#lines, 9)
+  eq(lines[1]:match("^ 1  —%s+src/main.lua:1%s+local M = {}") ~= nil, true)
+  eq(lines[2], " 2  ·")
+  eq(lines[3]:match("^ 3  gamma%s+src/other.lua:3%s+gamma") ~= nil, true)
+  child.type_keys("d", "1") -- clears seal 1 (and the kunai it made)
+  eq(child.api.nvim_buf_get_lines(0, 0, 1, false)[1], " 1  ·")
+  child.type_keys("3")
+  eq({ bufname(), cursor()[1] }, { "other.lua", 3 })
+  eq(child.lua_get([[require("hiraishin.seal_menu").current()]]), vim.NIL)
+  main_lua(1)
+  eq(child.signs(), {})
+end
+
+T["quick seals"]["the statusline lists the seals"] = function()
+  main_lua(1)
+  child.lua([[require("hiraishin").seal(2)]])
+  other_lua(1)
+  child.lua([[require("hiraishin").seal(5)]])
+  eq(child.lua_get([[require("hiraishin").status()]]), "⚡1 · #2 5")
+  local seals = child.lua_get([[require("hiraishin").seals()]])
+  eq({ seals[1].seal, seals[1].here, seals[2].seal, seals[2].here }, { 2, false, 5, true })
 end
 
 return T

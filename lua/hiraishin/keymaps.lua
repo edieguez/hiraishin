@@ -45,6 +45,20 @@ M.defaults = {
   manager = { lhs = "<leader>he", desc = "Edit kunai (manager)", rhs = "<cmd>Hiraishin manager<cr>" },
   list = { lhs = "<leader>hl", desc = "Switch kunai list", rhs = "<cmd>Hiraishin list<cr>" },
   undo = { lhs = "<leader>hu", desc = "Undo kunai deletion", rhs = "<cmd>Hiraishin undo<cr>" },
+  seal_free = {
+    lhs = "mm",
+    desc = "Seal with the next free number",
+    rhs = function()
+      require("hiraishin.commands").seal_free()
+    end,
+  },
+  seals = {
+    lhs = "g<Space>",
+    desc = "Seal menu",
+    rhs = function()
+      require("hiraishin.seal_menu").open()
+    end,
+  },
   next = {
     lhs = "]k",
     desc = "Next kunai in buffer",
@@ -92,7 +106,7 @@ M.defaults = {
 ---Nine-key groups. Override with a prefix ("<leader>j" → <leader>j1..9) or false.
 M.groups = {
   assign_slot = {
-    prefix = "<leader>h",
+    prefix = "m",
     desc = "Seal kunai as %d",
     rhs = function(n)
       return function()
@@ -101,7 +115,7 @@ M.groups = {
     end,
   },
   jump_slot = {
-    prefix = "<leader>",
+    prefix = "g",
     desc = "Jump to seal %d",
     rhs = function(n)
       return function()
@@ -180,10 +194,9 @@ function M.setup()
     end
   end
   -- label the <leader>h group in which-key (v3 API), when it is installed
-  local prefix = overrides.assign_slot
-  if prefix == nil then
-    prefix = M.groups.assign_slot.prefix
-  end
+  -- (the group of the toggle key: <leader>hh -> <leader>h)
+  local toggle = by_action.toggle
+  local prefix = toggle and #toggle > 1 and toggle:sub(1, -2) or nil
   if prefix then
     vim.schedule(function()
       local ok, wk = pcall(require, "which-key")

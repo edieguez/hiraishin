@@ -227,6 +227,7 @@ T["commands"]["completes subcommands and names"] = function()
     "relocate",
     "scope",
     "seal",
+    "seals",
     "toggle",
     "undo",
   })

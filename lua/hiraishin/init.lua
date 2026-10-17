@@ -494,6 +494,32 @@ function M.seal(n)
   return M.update(bm.id, { slot = n })
 end
 
+---Seal the cursor line with the lowest free seal of the active list.
+---A line already sealed keeps its seal.
+---@return hiraishin.Bookmark? bookmark, string|integer|nil err_or_seal, boolean? already
+function M.seal_free()
+  ensure_setup()
+  local here = M.at_cursor()
+  if here then
+    local n = M.slot_of(here.id)
+    if n then
+      return here, n, true
+    end
+  end
+  local list = list_ops.active(store.get(resolve({})))
+  for n = 1, 9 do
+    if not list.slots[tostring(n)] then
+      local bm, err = M.seal(n)
+      if not bm then
+        return nil, err
+      end
+      return bm, n
+    end
+  end
+  return nil,
+    "All nine seals are taken · " .. require("hiraishin.ui").hint("seals", ":Hiraishin seals") .. " to free one"
+end
+
 ---Resolve a jump target: a seal number (1..9) or an id/name.
 ---@return hiraishin.Context?, hiraishin.Bookmark?, string? list_name, string? err
 local function resolve_target(key, opts)
@@ -943,7 +969,36 @@ function M.status(bufnr)
   if name ~= "default" then
     table.insert(parts, "[" .. name .. "]")
   end
+  local seals = vim.tbl_map(function(s)
+    return tostring(s.seal)
+  end, M.seals(bufnr))
+  if #seals > 0 then
+    table.insert(parts, (#parts > 0 and "· " or "") .. "#" .. table.concat(seals, " "))
+  end
   return table.concat(parts, " ")
+end
+
+---Seals of the active list in the buffer's scope, in order, for statuslines.
+---@param bufnr? integer
+---@return { seal: integer, name?: string, file: string, here: boolean }[]
+function M.seals(bufnr)
+  if not did_setup then
+    return {}
+  end
+  bufnr = (bufnr == nil or bufnr == 0) and vim.api.nvim_get_current_buf() or bufnr
+  local ctx = scope.for_buf(bufnr)
+  if not ctx then
+    return {}
+  end
+  local list = list_ops.active(store.get(ctx))
+  local out = {}
+  for n = 1, 9 do
+    local bm = list.bookmarks[list.slots[tostring(n)] or ""]
+    if bm then
+      table.insert(out, { seal = n, name = bm.name, file = bm.file, here = bm.file == ctx.file })
+    end
+  end
+  return out
 end
 
 ---Turn the global marks A-Z into named kunai ("mark A", ...) in the active

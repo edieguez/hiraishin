@@ -3,6 +3,19 @@
 Versions are git tags (`git checkout v0.6.0`). Dates are when the version
 was tagged.
 
+## v0.9.0 — 2026-10-17
+
+One keymap layout: anything with a number has no leader, everything else
+lives under `<leader>h`.
+
+- **Breaking:** seals moved from `<leader>h1`…`9` / `<leader>1`…`9` to
+  `m1`…`m9` (seal) and `g1`…`g9` (go). No modifiers or dead keys, so they
+  work the same on any keyboard layout, on macOS and Linux
+- `mm` (`:Hiraishin seal`) seals the line with the next free number
+- `g<Space>` (`:Hiraishin seals`): the seal menu, to see, jump to and clear seals
+- The statusline lists the seals in use (`· #1 2 4`); `require("hiraishin").seals()`
+  gives them as data
+
 ## v0.8.0 — 2026-10-17
 
 - **Breaking:** next / previous kunai moved from `]m` `[m` `]M` `[M` to

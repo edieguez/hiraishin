@@ -10,8 +10,8 @@ one key, the way Minato jumps to his marked kunai.
 - **Kunai follow your code.** Extmarks track edits while a file is open. After
   changes made outside Neovim, each kunai finds its line again from the text it
   remembers. A kunai that can't be found is marked stale, never dropped.
-- **Seals 1–9 for quick jumps.** `<leader>h3` seals a line, `<leader>3` jumps
-  back to it, and `<leader>hj` / `<leader>hk` cycle through your seals.
+- **Seals 1–9 for quick jumps.** `m3` seals a line, `g3` goes back to it, `mm`
+  picks the next free number for you and `g<Space>` shows all nine.
 - **Per project, per branch, or global.** One store per git root by default.
 - **Fits your setup.** Uses the picker you already have (snacks, telescope,
   fzf-lua, mini.pick), labels its which-key group and has a lualine component.
@@ -49,8 +49,8 @@ the picker follows your `vim.g.lazyvim_picker`.
 
 1. `<leader>hh` places a kunai on the current line (press it again to remove it).
 2. `<leader>ha` places a **named** kunai. It suggests the enclosing function.
-3. `<leader>h1` seals the line as **1**. From anywhere in the project,
-   `<leader>1` jumps back to it and `<C-o>` returns you.
+3. `m1` seals the line as **1** (or `mm` for the next free number). From
+   anywhere in the project, `g1` goes back to it and `<C-o>` returns you.
 4. `<leader>hf` finds kunai in a picker (with a preview, except in the
    `vim.ui.select` fallback).
 5. `<leader>he` opens the manager to rename, reorder or delete kunai in bulk.
@@ -79,10 +79,19 @@ turned off (see [Configuration](#configuration)).
 
 | Key | Command | Action |
 | --- | --- | --- |
-| `<leader>h1`…`9` | `:Hiraishin seal {1-9}` | Seal this line with that number |
-| `<leader>1`…`9` | `:Hiraishin jump {1-9}` | Jump to that seal |
+| `m1`…`m9` | `:Hiraishin seal {1-9}` | Seal this line with that number |
+| `mm` | `:Hiraishin seal` | Seal this line with the next free number |
+| `g1`…`g9` | `:Hiraishin jump {1-9}` | Go to that seal |
+| `g<Space>` | `:Hiraishin seals` | Seal menu: a digit goes there, `d` + digit clears it |
+| `<C-o>` | | Back to where you were before the jump |
 | `<leader>hj` / `<leader>hk` | `:Hiraishin next seal` / `prev seal` | Cycle through seals in order (1 → 9) |
 | | `:Hiraishin seal clear` | Remove the seal from this line |
+
+The rule: anything with a number has no leader; everything else lives under
+`<leader>h`. None of these keys need a modifier or a dead key, so they work
+the same on any layout, on macOS and Linux. `m1`…`m9` take nothing from Vim
+(it can't set digit marks), `mm` gives up mark `m`, and `g1`…`g9` only
+shadow `g8`. Vim's other marks (`ma`, `'a`, …) keep working.
 
 **Moving around**
 
@@ -119,6 +128,12 @@ of deleted projects and branches, and empty ones, after asking) and
 
 Seals are quick jumps, like harpoon's slots, numbered 1–9 within each list:
 
+- `m3` seals the line as 3 and `g3` goes back to it. `mm` picks the lowest
+  free number and tells you which (`Sealed as 2 · g2 jumps here`); on a line
+  that is already sealed it just tells you its number.
+- `g<Space>` opens the seal menu: every seal with its name, file, line and
+  text. Press a digit to go there, `d` + digit (or `dd` on a line) to clear
+  one, `q` to close. It answers "what was 3 again?".
 - Sealing a line with no kunai creates one just for the seal. When that seal
   is cleared or moved to another line, that kunai goes with it, so no
   leftover bookmark stays behind.
@@ -129,8 +144,9 @@ Seals are quick jumps, like harpoon's slots, numbered 1–9 within each list:
   cursor isn't on a seal, they continue from the last seal you jumped to.
 - The sign column shows the seal number instead of the bookmark icon.
 
-Jumps go to the jumplist (`<C-o>` returns) and reuse a window that already
-shows the file. The line you land on flashes briefly.
+Jumps go to the jumplist, so `<C-o>` takes you back to where you were. They
+reuse a window that already shows the file, and the line you land on flashes
+briefly.
 
 ## Picker
 
@@ -178,7 +194,7 @@ the next list, `q` closes and `g?` shows help.
 ## Lists and scopes
 
 **Lists** group kunai, for example one per task: `:Hiraishin list bug-1234`
-creates the list and switches to it. Seals belong to the list, so `<leader>1`
+creates the list and switches to it. Seals belong to the list, so `g1`
 follows the list you are in.
 
 **Scopes** decide where lists live:
@@ -234,7 +250,8 @@ Highlight groups, each linked to a default you can override:
 ## Integrations
 
 ```lua
--- lualine: "<icon>3 [bug-1234]"; click it to pick from this file's kunai
+-- lualine: "<icon>3 [bug-1234] · #1 2 4" (kunai in this file, the list,
+-- the seals in use); click it to pick from this file's kunai
 sections = { lualine_x = { require("hiraishin.integrations.lualine") } }
 ```
 
@@ -342,16 +359,16 @@ require("hiraishin").setup({
 
 Keymap overrides: single actions (`toggle`, `add`, `note`, `delete`, `undo`,
 `next`, `prev`, `next_list`, `prev_list`, `next_seal`, `prev_seal`, `pick`,
-`pick_all`, `global`, `pick_global`, `quickfix`, `manager`, `list`) take a key
-or `false`. The nine-key groups `assign_slot` and `jump_slot` take a prefix or
+`pick_all`, `global`, `pick_global`, `quickfix`, `manager`, `list`,
+`seal_free`, `seals`) take a key or `false`. The nine-key groups `assign_slot` and `jump_slot` take a prefix or
 `false`:
 
 ```lua
 keymaps = {
   toggle = "<leader>bb",
-  jump_slot = "<leader>j",        -- <leader>j1 … <leader>j9
-  next_seal = "<leader>]",
-  assign_slot = false,
+  jump_slot = "<leader>",         -- <leader>1 … <leader>9 instead of g1 … g9
+  assign_slot = "<leader>h",      -- <leader>h1 … <leader>h9 instead of m1 … m9
+  seal_free = false,              -- keep Vim's mark m
 }
 ```
 
@@ -364,6 +381,8 @@ h.add({ name?, note?, bufnr?, line?, end_line? }) --> bookmark | nil, err
 h.remove(id_or_name)
 h.update(id_or_name, { name?, note?, slot? }) -- false clears a field
 h.seal(n)                                   -- seal the cursor line
+h.seal_free()                               --> bookmark, seal (the next free one)
+h.seals()                                   --> { { seal, name, file, here }, ... }
 h.slot_of(id_or_name)
 h.jump(name_or_seal, { split? })
 h.next({ count?, wrap?, scope? = "buffer"|"list"|"seal" })
