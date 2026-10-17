@@ -261,6 +261,33 @@ T["apply"]["names can't contain │"] = function()
   )
 end
 
+T["live"] = MiniTest.new_set()
+
+T["live"]["an open manager shows changes made elsewhere"] = function()
+  main_lua()
+  place(1, "one")
+  place(5, "five")
+  child.cmd("Hiraishin manager")
+  child.api.nvim_win_set_cursor(0, { 2, 0 }) -- on "five"
+  -- a kunai placed in the file behind the float
+  child.lua([[require("hiraishin").add({ bufnr = vim.fn.bufnr("main.lua"), line = 3, name = "three" })]])
+  child.lua([[vim.wait(50)]])
+  eq(#lines(), 3)
+  eq(shown()[3]:match("three") ~= nil, true)
+  eq(child.api.nvim_get_current_line():match("five") ~= nil, true) -- cursor stayed on its kunai
+end
+
+T["live"]["edits in progress are never overwritten"] = function()
+  main_lua()
+  place(1, "one")
+  child.cmd("Hiraishin manager")
+  set_lines({ (lines()[1]:gsub("one", "edited")) })
+  child.lua([[require("hiraishin").add({ bufnr = vim.fn.bufnr("main.lua"), line = 3, name = "three" })]])
+  child.lua([[vim.wait(50)]])
+  eq(#lines(), 1)
+  eq(shown()[1]:match("edited") ~= nil, true)
+end
+
 T["undo"] = MiniTest.new_set()
 
 T["undo"]["brings back toggle, delete, picker and prune removals in order"] = function()

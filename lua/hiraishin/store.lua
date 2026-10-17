@@ -293,6 +293,22 @@ function M.merge(base, ours, theirs)
   return out
 end
 
+---Listeners told (with the store path) whenever a store's data changed:
+---an API change, a merge with another Neovim, or a reload from disk.
+---@type fun(path: string)[]
+local listeners = {}
+
+---@param fn fun(path: string)
+function M.subscribe(fn)
+  table.insert(listeners, fn)
+end
+
+local function notify(path)
+  for _, fn in ipairs(listeners) do
+    pcall(fn, path)
+  end
+end
+
 ---Called with the store path after a save merged changes from disk.
 ---@type fun(path: string)?
 M.on_merge = nil
@@ -337,8 +353,11 @@ local function save(path)
   entry.dirty = false
   entry.mtime = mtime_of(path)
   entry.base = vim.json.decode(json, { luanil = { object = true, array = true } })
-  if merged and M.on_merge then
-    M.on_merge(path)
+  if merged then
+    if M.on_merge then
+      M.on_merge(path)
+    end
+    notify(path)
   end
   return true
 end
@@ -361,6 +380,7 @@ function M.changed(ctx)
     return
   end
   entry.dirty = true
+  notify(ctx.store)
   local ms = config.options.storage.debounce_ms
   if ms <= 0 then
     save(ctx.store)
@@ -386,6 +406,7 @@ function M.reload_changed()
       entry.base = vim.deepcopy(data)
       entry.mtime = now
       reloaded[path] = true
+      notify(path)
     end
   end
   return reloaded

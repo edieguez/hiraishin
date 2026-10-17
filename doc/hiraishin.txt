@@ -202,7 +202,8 @@ Edit it like text, then |:w| applies everything at once:
   - delete lines to delete kunai (|:Hiraishin-undo| brings them back;
     `manager.confirm_delete` asks first)
 
-Only "│" separates columns: names and notes may contain "|", and names
+While it has no unapplied edits, the manager follows changes made
+elsewhere (toggles, the picker, another Neovim). Only "│" separates columns: names and notes may contain "|", and names
 can't contain "│". The path is read-only. Each line ends with a hidden kunai id; lines can be
 moved or deleted but not added. Problems (two kunai with one seal, a
 duplicate name, ...) are shown as diagnostics and nothing is applied.

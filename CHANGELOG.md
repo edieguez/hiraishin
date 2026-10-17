@@ -12,6 +12,8 @@
   `from_path` (documented and tested)
 - Fix: in the manager only `│` separates columns, so names and notes can
   contain `|`; names can't contain `│` or line breaks
+- An open manager without unapplied edits redraws when kunai change
+  elsewhere, keeping the cursor on its kunai
 
 ### UX and UI pass
 - Seals are quick jumps: sealing a bare line makes a kunai just for the seal,

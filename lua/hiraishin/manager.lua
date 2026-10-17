@@ -222,6 +222,48 @@ local function render(state)
   end
 end
 
+-- keep an open, unedited manager in step with changes made elsewhere
+-- (toggles, the picker, another Neovim); edits in progress are never touched
+local refresh_pending = false
+store.subscribe(function(path)
+  if refresh_pending or not current or current.ctx.store ~= path then
+    return
+  end
+  refresh_pending = true
+  vim.schedule(function()
+    refresh_pending = false
+    local state = current
+    if not state or not vim.api.nvim_buf_is_valid(state.buf) or vim.bo[state.buf].modified then
+      return
+    end
+    -- stay on the same kunai when lines shift
+    local id
+    if vim.api.nvim_win_is_valid(state.win) then
+      local row = vim.api.nvim_win_get_cursor(state.win)[1]
+      local text = vim.api.nvim_buf_get_lines(state.buf, row - 1, row, false)[1] or ""
+      id = text:match("/(%x+)%s*$")
+    end
+    M.refresh(state)
+    if id and vim.api.nvim_win_is_valid(state.win) then
+      for i, text in ipairs(vim.api.nvim_buf_get_lines(state.buf, 0, -1, false)) do
+        if text:match("/(%x+)%s*$") == id then
+          vim.api.nvim_win_set_cursor(state.win, { i, 0 })
+          break
+        end
+      end
+    end
+  end)
+end)
+
+---Redraw the manager from the store (drops unapplied edits).
+---@param state? hiraishin.ManagerState
+function M.refresh(state)
+  state = state or current
+  if state and vim.api.nvim_buf_is_valid(state.buf) then
+    render(state)
+  end
+end
+
 ---Apply the buffer to the list. Nothing changes when there are problems.
 ---@param state hiraishin.ManagerState
 ---@return boolean applied

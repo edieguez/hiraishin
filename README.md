@@ -159,7 +159,8 @@ You can change a seal (`1`–`9`, or `-` for none), a name (`-` for none) or a
 note. Move lines to reorder, delete lines to remove kunai, then `:w`. Problems
 such as two kunai with one seal, a duplicate name or an edited path appear as
 diagnostics, and nothing is applied until they are fixed. A `●` in the title
-means unsaved edits, and `!` marks a stale kunai. `<CR>` jumps, `<Tab>` shows
+means unsaved edits, and `!` marks a stale kunai. Without unsaved edits, the
+manager redraws when kunai change elsewhere. `<CR>` jumps, `<Tab>` shows
 the next list, `q` closes and `g?` shows help.
 
 ## Lists and scopes
