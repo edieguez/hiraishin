@@ -3,7 +3,7 @@
 Versions are git tags (`git checkout v0.6.0`). Dates are when the version
 was tagged.
 
-## Unreleased
+## v0.7.1 — 2026-10-17
 
 - Fix: the fzf-lua picker ignored `picker.show_notes` and `virt_text.note_icon`
 - Unknown `keymaps` actions (typos) are reported like other unknown keys
