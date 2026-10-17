@@ -253,9 +253,19 @@ function M.toggle(opts)
   return bm, bm and "added" or nil, add_err
 end
 
----Change a bookmark's name or note. Pass `false` to clear a field.
+---@param slot any
+---@return string? slot key "1".."9"
+local function slot_key(slot)
+  local n = tonumber(slot)
+  if n and n >= 1 and n <= 9 and n == math.floor(n) then
+    return tostring(n)
+  end
+end
+
+---Change a bookmark's name, note or seal (slot). Pass `false` to clear a field.
+---Giving a seal that another kunai holds moves the seal to this one.
 ---@param key string id or name
----@param fields { name?: string|false, note?: string|false }
+---@param fields { name?: string|false, note?: string|false, slot?: integer|false }
 ---@param opts? { bufnr?: integer }
 ---@return hiraishin.Bookmark? bookmark, string? err
 function M.update(key, fields, opts)
@@ -267,6 +277,13 @@ function M.update(key, fields, opts)
   if not bm then
     return nil, string.format("no kunai '%s'", key)
   end
+  local new_slot
+  if fields.slot then
+    new_slot = slot_key(fields.slot)
+    if not new_slot then
+      return nil, "seals go from 1 to 9"
+    end
+  end
   if fields.name ~= nil then
     local name = fields.name and util.trim(fields.name) or nil
     if name and list_ops.find_name(list, name, bm.id) then
@@ -277,10 +294,120 @@ function M.update(key, fields, opts)
   if fields.note ~= nil then
     bm.note = fields.note and util.trim(fields.note) or nil
   end
+  if fields.slot ~= nil then
+    local current = list_ops.slot_of(list, bm.id)
+    if current then
+      list.slots[current] = nil
+    end
+    if new_slot then
+      list.slots[new_slot] = bm.id
+    end
+  end
   bm.updated_at = os.time()
   changed(ctx)
   events.emit("HiraishinUpdate", { bookmark = snapshot(ctx, bm), list = list_name })
   return snapshot(ctx, bm)
+end
+
+---Seal (slot) number of a bookmark in the active list.
+---@param key string id or name
+---@param opts? { bufnr?: integer }
+---@return integer?
+function M.slot_of(key, opts)
+  ensure_setup()
+  opts = opts or {}
+  local list = list_ops.active(store.get(scope.resolve(opts.bufnr)))
+  local bm = list_ops.find(list, key)
+  local slot = bm and list_ops.slot_of(list, bm.id)
+  return slot and tonumber(slot) or nil
+end
+
+---Put seal `n` on the kunai of the cursor line, placing one if needed.
+---@param n integer 1..9
+---@return hiraishin.Bookmark? bookmark, string? err
+function M.seal(n)
+  ensure_setup()
+  if not slot_key(n) then
+    return nil, "seals go from 1 to 9"
+  end
+  local bm = M.at_cursor()
+  if not bm then
+    local err
+    bm, err = M.add()
+    if not bm then
+      return nil, err
+    end
+  end
+  return M.update(bm.id, { slot = n })
+end
+
+---Resolve a jump target: a seal number (1..9) or an id/name.
+---@return hiraishin.Context?, hiraishin.Bookmark?, string? list_name, string? err
+local function resolve_target(key, opts)
+  local ctx = scope.resolve(opts.bufnr)
+  local list, list_name = list_ops.active(store.get(ctx))
+  local slot = slot_key(key)
+  local bm
+  if slot then
+    local id = list.slots[slot]
+    bm = id and list.bookmarks[id] or nil
+    if not bm then
+      return nil, nil, nil, string.format("seal %s is empty", slot)
+    end
+  else
+    bm = list_ops.find(list, tostring(key))
+    if not bm then
+      return nil, nil, nil, string.format("no kunai '%s'", key)
+    end
+  end
+  return ctx, bm, list_name
+end
+
+---Jump to a kunai by seal number or name/id.
+---@param key integer|string
+---@param opts? { split?: "vsplit"|"split"|"tab", bufnr?: integer }
+---@return hiraishin.Bookmark? bookmark, string? err
+function M.jump(key, opts)
+  ensure_setup()
+  opts = opts or {}
+  local ctx, bm, list_name, err = resolve_target(key, opts)
+  if not ctx then
+    return nil, err
+  end
+  return require("hiraishin.nav").jump(ctx, bm, list_name, opts)
+end
+
+---Jump to the next kunai: in this buffer by line (default), or across files
+---in list order with `scope = "list"`.
+---@param opts? { count?: integer, wrap?: boolean, scope?: "buffer"|"list" }
+---@return hiraishin.Bookmark? bookmark, string? err
+function M.next(opts)
+  ensure_setup()
+  opts = opts or {}
+  local nav = require("hiraishin.nav")
+  if opts.scope == "list" then
+    return nav.step_list(1, opts)
+  end
+  return nav.step_buffer(1, opts)
+end
+
+---Jump to the previous kunai. See next().
+---@param opts? { count?: integer, wrap?: boolean, scope?: "buffer"|"list" }
+---@return hiraishin.Bookmark? bookmark, string? err
+function M.prev(opts)
+  ensure_setup()
+  opts = opts or {}
+  local nav = require("hiraishin.nav")
+  if opts.scope == "list" then
+    return nav.step_list(-1, opts)
+  end
+  return nav.step_buffer(-1, opts)
+end
+
+---Edit the note of the cursor line's kunai in a floating window.
+function M.note()
+  ensure_setup()
+  return require("hiraishin.note").edit()
 end
 
 ---@param key string id or name

@@ -83,7 +83,8 @@ end
 ---@param s string?
 ---@return string?
 function M.trim(s)
-  if s == nil then
+  -- anything that is not a string (nil, vim.NIL from RPC, false) means "none"
+  if type(s) ~= "string" then
     return nil
   end
   s = vim.trim(s)

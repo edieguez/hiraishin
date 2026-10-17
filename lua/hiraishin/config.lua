@@ -27,6 +27,22 @@ M.defaults = {
     show_slot = true,
     numhl = false,
   },
+  line_highlight = false,
+  virt_text = {
+    enabled = true,
+    only_named = true, -- unnamed kunai only show the note icon (if any)
+    position = "eol", -- "eol" | "right_align"
+    prefix = "← ",
+    note_icon = "✎",
+  },
+  name = {
+    suggest_from_treesitter = true,
+  },
+  jump = {
+    reuse_window = true, -- jump to a window already showing the file
+    center = true, -- zz after jumping
+    open_folds = true, -- zv after jumping
+  },
   -- ask before toggling off a kunai that has a name or a note
   confirm_remove_named = true,
   -- false disables all default keymaps; a table overrides per action
@@ -104,6 +120,18 @@ local function validate(o)
   check("signs.stale_icon", o.signs.stale_icon, "string")
   check("signs.show_slot", o.signs.show_slot, "boolean")
   check("signs.numhl", o.signs.numhl, "boolean")
+  check("line_highlight", o.line_highlight, "boolean")
+  check("virt_text.enabled", o.virt_text.enabled, "boolean")
+  check("virt_text.only_named", o.virt_text.only_named, "boolean")
+  if o.virt_text.position ~= "eol" and o.virt_text.position ~= "right_align" then
+    error("hiraishin: virt_text.position: expected 'eol' or 'right_align'", 0)
+  end
+  check("virt_text.prefix", o.virt_text.prefix, "string")
+  check("virt_text.note_icon", o.virt_text.note_icon, "string")
+  check("name.suggest_from_treesitter", o.name.suggest_from_treesitter, "boolean")
+  check("jump.reuse_window", o.jump.reuse_window, "boolean")
+  check("jump.center", o.jump.center, "boolean")
+  check("jump.open_folds", o.jump.open_folds, "boolean")
   check("confirm_remove_named", o.confirm_remove_named, "boolean")
   check("keymaps", o.keymaps, { "boolean", "table" })
 end

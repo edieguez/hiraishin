@@ -48,7 +48,8 @@ M.subcommands = {
         add(table.concat(args, " "))
       elseif bang then
         local current = h.at_cursor()
-        vim.ui.input({ prompt = "Kunai name: ", default = current and current.name or "" }, function(input)
+        local default = current and current.name or require("hiraishin.names").suggest() or ""
+        vim.ui.input({ prompt = "Kunai name: ", default = default }, function(input)
           if input ~= nil then
             add(input)
           end
@@ -75,6 +76,78 @@ M.subcommands = {
       end
     end,
     complete = bookmark_names,
+  },
+  jump = {
+    -- :Hiraishin jump {name|1-9} [vsplit|split|tab]
+    run = function(args)
+      if #args == 0 then
+        return warn("usage: :Hiraishin jump {name|1-9} [vsplit|split|tab]")
+      end
+      local split
+      if #args > 1 and vim.tbl_contains({ "vsplit", "split", "tab" }, args[#args]) then
+        split = table.remove(args)
+      end
+      local _, err = require("hiraishin").jump(table.concat(args, " "), { split = split })
+      if err then
+        warn(err)
+      end
+    end,
+    complete = function()
+      local out = bookmark_names()
+      for i = 1, 9 do
+        table.insert(out, tostring(i))
+      end
+      return out
+    end,
+  },
+  next = {
+    -- :Hiraishin next [list]
+    run = function(args)
+      local _, err = require("hiraishin").next({ scope = args[1] == "list" and "list" or "buffer" })
+      if err then
+        warn(err)
+      end
+    end,
+    complete = function()
+      return { "list" }
+    end,
+  },
+  prev = {
+    run = function(args)
+      local _, err = require("hiraishin").prev({ scope = args[1] == "list" and "list" or "buffer" })
+      if err then
+        warn(err)
+      end
+    end,
+    complete = function()
+      return { "list" }
+    end,
+  },
+  seal = {
+    -- :Hiraishin seal {1-9} | :Hiraishin seal clear
+    run = function(args)
+      local h = require("hiraishin")
+      if args[1] == "clear" then
+        local bm = h.at_cursor()
+        if not bm then
+          return warn("no kunai on this line")
+        end
+        h.update(bm.id, { slot = false })
+        return
+      end
+      local _, err = h.seal(tonumber(args[1]))
+      if err then
+        warn(err)
+      end
+    end,
+    complete = function()
+      return { "1", "2", "3", "4", "5", "6", "7", "8", "9", "clear" }
+    end,
+  },
+  note = {
+    run = function()
+      require("hiraishin").note()
+    end,
   },
   relocate = {
     run = function(args)
