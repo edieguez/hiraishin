@@ -370,5 +370,6 @@ you were) and `HiraishinListChanged`.
 
 ```sh
 make test                                 # fetches mini.nvim and the pickers into deps/, runs the suite
+                                          # (the fzf-lua tests need fzf on PATH)
 make test-file FILE=tests/test_store.lua
 ```

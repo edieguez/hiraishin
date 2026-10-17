@@ -18,6 +18,13 @@ jobs:
         with:
           neovim: true
           version: ${{ matrix.nvim }}
+      - name: Install fzf (for the fzf-lua tests)
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update -q && sudo apt-get install -yq fzf
+          else
+            brew install fzf
+          fi
       - run: make test
 
   lint:

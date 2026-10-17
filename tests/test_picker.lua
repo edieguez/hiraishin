@@ -358,6 +358,54 @@ T["fzf-lua"]["key names"] = function()
   eq(child.lua_get([[require("hiraishin.picker.fzf").fzf_key("<leader>x")]]), vim.NIL)
 end
 
+-- fzf-lua driving a real fzf in a terminal (needs the fzf binary)
+T["fzf-lua (real fzf)"] = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      if child.fn.executable("fzf") == 0 then
+        MiniTest.skip("fzf is not installed")
+      end
+      child.lua([[vim.opt.rtp:prepend(HIRAISHIN_DEPS .. "/fzf-lua")]])
+      child.lua([[require("fzf-lua").setup({ winopts = { preview = { hidden = true } } })]])
+      child.lua(
+        [[require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 }, picker = { backend = "fzf-lua" } })]]
+      )
+    end,
+  },
+})
+
+-- the fzf terminal buffer shows `text`
+local FZF_SHOWS = [[(function(text)
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.bo[b].buftype == "terminal" then
+      for _, l in ipairs(vim.api.nvim_buf_get_lines(b, 0, -1, false)) do
+        if l:find(text, 1, true) then return true end
+      end
+    end
+  end
+  return false
+end)]]
+
+T["fzf-lua (real fzf)"]["filters and jumps"] = function()
+  fixture()
+  child.cmd("Hiraishin pick")
+  eq(wait(FZF_SHOWS .. "('src/other.lua:2')", 5000), true)
+  child.type_keys("ret")
+  wait(FZF_SHOWS .. "('1/3')", 3000)
+  child.type_keys("<CR>")
+  eq(wait("vim.fs.basename(vim.api.nvim_buf_get_name(0)) == 'main.lua' and vim.fn.line('.') == 4", 5000), true)
+end
+
+T["fzf-lua (real fzf)"]["ctrl-d deletes and reloads"] = function()
+  fixture()
+  child.cmd("Hiraishin pick")
+  eq(wait(FZF_SHOWS .. "('src/other.lua:2')", 5000), true)
+  child.type_keys("<C-d>")
+  eq(wait("#require('hiraishin').list() == 2", 5000), true)
+  eq(wait("not " .. FZF_SHOWS .. "('src/other.lua:2')", 5000), true) -- the list reloaded
+  child.type_keys("<Esc>")
+end
+
 T["keymaps"] = function()
   child.lua([[vim.g.mapleader = " "; require("hiraishin").setup({ storage = { dir = T.storage } })]])
   eq(child.lua_get([[vim.fn.maparg("<leader>hf", "n")]]), "<Cmd>Hiraishin pick<CR>")
