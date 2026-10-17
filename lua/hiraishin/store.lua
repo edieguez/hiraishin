@@ -364,6 +364,16 @@ function M.reload_changed()
   return reloaded
 end
 
+---Store files currently loaded in this Neovim.
+---@return table<string, boolean>
+function M.loaded()
+  local out = {}
+  for path in pairs(cache) do
+    out[path] = true
+  end
+  return out
+end
+
 ---Drop cached data (tests, or after changing the storage directory).
 function M.reset()
   M.flush()

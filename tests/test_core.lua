@@ -211,6 +211,7 @@ T["commands"]["completes subcommands and names"] = function()
   eq(child.lua_get([[vim.fn.getcompletion("Hiraishin ", "cmdline")]]), {
     "add",
     "delete",
+    "gc",
     "import",
     "jump",
     "list",

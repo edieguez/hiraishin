@@ -43,23 +43,40 @@ function M.store_name(root)
   return string.format("%s__%s.json", slug, vim.fn.sha256(root):sub(1, 8))
 end
 
----Current git branch of a root, read from .git/HEAD (no git process).
----Handles worktrees (.git file with "gitdir:"). nil when detached or no repo.
+---The git directory of a root: `.git`, or where a worktree's `.git` file points.
 ---@param root string
 ---@return string?
-function M.git_branch(root)
+function M.git_dir(root)
   local dotgit = root .. "/.git"
   local stat = vim.uv.fs_stat(dotgit)
   if not stat then
     return nil
   end
-  local gitdir = dotgit
-  if stat.type == "file" then
-    local first = (vim.fn.readfile(dotgit, "", 1)[1] or ""):match("^gitdir:%s*(.-)%s*$")
-    if not first then
-      return nil
-    end
-    gitdir = first:sub(1, 1) == "/" and first or (root .. "/" .. first)
+  if stat.type ~= "file" then
+    return dotgit
+  end
+  local first = (vim.fn.readfile(dotgit, "", 1)[1] or ""):match("^gitdir:%s*(.-)%s*$")
+  if not first then
+    return nil
+  end
+  return first:sub(1, 1) == "/" and first or (root .. "/" .. first)
+end
+
+---A branch name as it appears in a store file name.
+---@param branch string
+---@return string
+function M.branch_key(branch)
+  return (branch:gsub("[^%w%-_.]", "_"))
+end
+
+---Current git branch of a root, read from .git/HEAD (no git process).
+---Handles worktrees (.git file with "gitdir:"). nil when detached or no repo.
+---@param root string
+---@return string?
+function M.git_branch(root)
+  local gitdir = M.git_dir(root)
+  if not gitdir then
+    return nil
   end
   local ok, head = pcall(vim.fn.readfile, gitdir .. "/HEAD", "", 1)
   local ref = ok and head[1] and head[1]:match("^ref:%s*refs/heads/(.-)%s*$") or nil
@@ -146,7 +163,7 @@ local function make(root, abs)
       if branch then
         ctx.branch = branch
         ctx.fork_from = ctx.store
-        ctx.store = ctx.store:gsub("%.json$", "") .. "@" .. branch:gsub("[^%w%-_.]", "_") .. ".json"
+        ctx.store = ctx.store:gsub("%.json$", "") .. "@" .. M.branch_key(branch) .. ".json"
       end
     end
   end

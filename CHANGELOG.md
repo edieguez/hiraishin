@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Backlog
+- `:Hiraishin gc` deletes store files nobody needs: projects whose folder is
+  gone, deleted branches, empty stores and corrupt backups (asks first);
+  `:checkhealth` reports them
+
 ### UX and UI pass
 - Seals are quick jumps: sealing a bare line makes a kunai just for the seal,
   and it goes away when the seal is cleared or moved (undoable); kunai placed,

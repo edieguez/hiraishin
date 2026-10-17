@@ -258,4 +258,59 @@ T["help file builds tags for every command"] = function()
   end
 end
 
+T["gc"] = MiniTest.new_set()
+
+T["gc"]["finds and deletes store files nobody needs"] = function()
+  git_init()
+  git({ "branch", "feature/keep" })
+  main_lua()
+  place(3, "in-use")
+  child.lua([[
+    local scope = require("hiraishin.scope")
+    local dir = T.storage .. "/projects/"
+    vim.fn.mkdir(dir, "p")
+    local function store(name, root, n)
+      local bms = {}
+      for i = 1, n do
+        local id = string.format("%08x", i)
+        bms[id] = { id = id, file = "f", line = 1 }
+      end
+      vim.fn.writefile({ vim.json.encode({ version = 1, root = root, active_list = "default",
+        lists = { default = { order = vim.tbl_keys(bms), slots = vim.empty_dict(), bookmarks = bms } } }) }, dir .. name)
+    end
+    local base = scope.store_name(T.proj_a):gsub("%.json$", "")
+    store("gone__12345678.json", "/no/such/project", 2)
+    store(base .. "@feature_old.json", T.proj_a, 1)
+    store(base .. "@feature_keep.json", T.proj_a, 1)
+    store(scope.store_name(T.proj_b), T.proj_b, 0)
+    vim.fn.writefile({ "{" }, dir .. "broken.json.corrupt-1")
+    require("hiraishin.store").flush()
+  ]])
+  local reasons = child.lua_get([[vim.tbl_map(function(o) return vim.fs.basename(o.path) .. " " .. o.reason end,
+    require("hiraishin.gc").orphans())]])
+  local base = child.lua_get([[require("hiraishin.scope").store_name(T.proj_a):gsub("%.json$", "")]])
+  local proj_b = child.lua_get([[require("hiraishin.scope").store_name(T.proj_b)]])
+  table.sort(reasons)
+  local expected = {
+    base .. "@feature_old.json branch 'feature_old' no longer exists",
+    "broken.json.corrupt-1 corrupt file set aside",
+    "gone__12345678.json project folder is gone: /no/such/project",
+    proj_b .. " no kunai",
+  }
+  table.sort(expected)
+  eq(reasons, expected)
+  -- asks first; cancelling keeps everything
+  child.lua([[vim.fn.confirm = function(msg) _G.asked = msg; return 2 end]])
+  child.cmd("Hiraishin gc")
+  eq(child.lua_get("_G.asked"):match("^Delete 4 store files%?") ~= nil, true)
+  eq(#child.lua_get([[require("hiraishin.gc").orphans()]]), 4)
+  child.cmd("Hiraishin! gc")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Deleted 4 store files")
+  local left = child.lua_get([[vim.tbl_map(vim.fs.basename, vim.fn.glob(T.storage .. "/projects/*", false, true))]])
+  table.sort(left)
+  eq(left, { base .. ".json", base .. "@feature_keep.json" })
+  child.cmd("Hiraishin gc")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "No store files to clean up")
+end
+
 return T

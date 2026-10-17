@@ -327,6 +327,39 @@ M.subcommands = {
     end,
     complete = bookmark_names,
   },
+  gc = {
+    -- :Hiraishin gc   list unneeded store files and delete them after asking
+    -- :Hiraishin! gc  delete without asking
+    run = function(_, bang)
+      local gc = require("hiraishin.gc")
+      local orphans = gc.orphans()
+      if #orphans == 0 then
+        return ui.info("No store files to clean up")
+      end
+      if not bang then
+        local dir = require("hiraishin.config").options.storage.dir
+        local lines = {}
+        for i, o in ipairs(orphans) do
+          if i > 15 then
+            table.insert(lines, string.format("  … and %d more", #orphans - 15))
+            break
+          end
+          table.insert(lines, string.format("  %s  (%s)", o.path:sub(#dir + 2), o.reason))
+        end
+        local msg = string.format(
+          "Delete %d store file%s? This cannot be undone.\n%s",
+          #orphans,
+          #orphans == 1 and "" or "s",
+          table.concat(lines, "\n")
+        )
+        if vim.fn.confirm(msg, "&Delete\n&Cancel", 2) ~= 1 then
+          return
+        end
+      end
+      local n = gc.delete(orphans)
+      ui.info(string.format("Deleted %d store file%s", n, n == 1 and "" or "s"))
+    end,
+  },
   prune = {
     run = function()
       local removed = require("hiraishin").prune()

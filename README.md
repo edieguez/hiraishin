@@ -96,7 +96,8 @@ turned off (see [Configuration](#configuration)).
 
 **Other commands:** `:Hiraishin scope project|global|branch` (for this
 session), `:Hiraishin relocate [name]` (move a kunai to the cursor; with no
-name, pick among stale ones), `:Hiraishin prune` (remove stale kunai) and
+name, pick among stale ones), `:Hiraishin prune` (remove stale kunai), `:Hiraishin gc` (delete store files
+of deleted projects and branches, and empty ones, after asking) and
 `:Hiraishin import marks` (turn global marks A–Z into kunai). A bare
 `:Hiraishin` opens the picker.
 

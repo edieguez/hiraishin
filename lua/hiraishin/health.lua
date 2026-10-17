@@ -47,6 +47,17 @@ function M.check()
     )
   end
 
+  local orphans = require("hiraishin.gc").orphans()
+  if #orphans > 0 then
+    health.info(
+      string.format(
+        "%d store file%s no longer needed · :Hiraishin gc cleans up",
+        #orphans,
+        #orphans == 1 and " is" or "s are"
+      )
+    )
+  end
+
   -- config
   if #config.unknown > 0 then
     health.warn("unknown config keys: " .. table.concat(config.unknown, ", "))

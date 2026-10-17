@@ -148,6 +148,14 @@ All commands are subcommands of `:Hiraishin`, with completion.
 :Hiraishin prune                                            *:Hiraishin-prune*
     Remove stale kunai (|:Hiraishin-undo| brings them back).
 
+:Hiraishin gc                                                  *:Hiraishin-gc*
+:Hiraishin! gc
+    Delete store files that are no longer needed: projects whose folder is
+    gone, branch stores of deleted branches, stores without kunai and
+    corrupt files set aside. Lists them and asks first (! skips asking).
+    Stores open in this Neovim are kept. |:checkhealth| reports how many
+    there are.
+
 :Hiraishin import marks                                    *:Hiraishin-import*
     Turn global marks A-Z into kunai named "mark A", ...
 
