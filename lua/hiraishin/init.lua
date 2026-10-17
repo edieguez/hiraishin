@@ -683,11 +683,11 @@ end
 ---@return integer? restored, string? err_or_notice
 function M.undo()
   ensure_setup()
-  local entry = history.pop()
+  local ctx = scope.resolve(0)
+  local entry = history.pop(ctx)
   if not entry then
     return nil, "Nothing to undo"
   end
-  local ctx = entry.ctx
   local data = store.get(ctx)
   local restored, notes = 0, {}
   -- restore in original order so positions line up
@@ -719,9 +719,7 @@ function M.undo()
       events.emit("HiraishinAdd", { bookmark = vim.deepcopy(bm), list = item.list, reason = "undo" })
     end
   end
-  if restored > 0 then
-    changed(ctx)
-  end
+  changed(ctx) -- also saves the shorter trash
   return restored, #notes > 0 and table.concat(notes, "; ") or nil
 end
 

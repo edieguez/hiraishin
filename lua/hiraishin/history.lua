@@ -1,4 +1,5 @@
----Recently deleted kunai, for :Hiraishin undo. In memory only.
+---Recently deleted kunai, for :Hiraishin undo. Kept in the store file
+---(`trash`), so undo works across restarts and is per project/scope.
 local config = require("hiraishin.config")
 local list_ops = require("hiraishin.list")
 
@@ -11,12 +12,16 @@ local M = {}
 ---@field index integer position in the list order
 
 ---@class hiraishin.HistoryEntry
----@field ctx hiraishin.Context
+---@field id string
+---@field at integer os.time() of the deletion
 ---@field items hiraishin.HistoryItem[]
 ---@field reason string
 
----@type hiraishin.HistoryEntry[]
-local stack = {}
+local function trash(ctx)
+  local data = require("hiraishin.store").get(ctx)
+  data.trash = data.trash or {}
+  return data.trash
+end
 
 ---Snapshot a kunai that is about to be deleted.
 ---@param ctx hiraishin.Context
@@ -40,7 +45,8 @@ function M.item(ctx, list_name, list, bm)
   return { list = list_name, bookmark = copy, slot = list_ops.slot_of(list, bm.id), index = index }
 end
 
----Remember one deletion (one entry, any number of kunai).
+---Remember one deletion (one entry, any number of kunai) in the store of `ctx`.
+---The caller saves the store.
 ---@param ctx hiraishin.Context
 ---@param items hiraishin.HistoryItem[]
 ---@param reason string
@@ -48,24 +54,28 @@ function M.record(ctx, items, reason)
   if #items == 0 or config.options.undo_history <= 0 then
     return
   end
-  table.insert(stack, { ctx = ctx, items = items, reason = reason })
-  while #stack > config.options.undo_history do
-    table.remove(stack, 1)
+  local t = trash(ctx)
+  local ids = {}
+  for _, e in ipairs(t) do
+    ids[e.id] = true
+  end
+  table.insert(t, { id = require("hiraishin.util").new_id(ids), at = os.time(), items = items, reason = reason })
+  while #t > config.options.undo_history do
+    table.remove(t, 1)
   end
 end
 
+---Take the latest deletion of a store.
+---@param ctx hiraishin.Context
 ---@return hiraishin.HistoryEntry?
-function M.pop()
-  return table.remove(stack)
+function M.pop(ctx)
+  return table.remove(trash(ctx))
 end
 
+---@param ctx hiraishin.Context
 ---@return integer
-function M.size()
-  return #stack
-end
-
-function M.clear()
-  stack = {}
+function M.size(ctx)
+  return #trash(ctx)
 end
 
 return M

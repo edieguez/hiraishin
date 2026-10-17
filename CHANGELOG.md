@@ -6,6 +6,8 @@
 - `:Hiraishin gc` deletes store files nobody needs: projects whose folder is
   gone, deleted branches, empty stores and corrupt backups (asks first);
   `:checkhealth` reports them
+- Undo history is kept in the store file: it survives restarts, each
+  project/scope has its own, and merges with other Neovim instances
 
 ### UX and UI pass
 - Seals are quick jumps: sealing a bare line makes a kunai just for the seal,

@@ -34,6 +34,7 @@ local function new_data(root)
     root = root,
     active_list = "default",
     lists = { default = M.new_list() },
+    trash = {},
   }
 end
 
@@ -127,6 +128,7 @@ local function normalize(data, root)
     end
   end
   data.lists.default = data.lists.default or M.new_list()
+  data.trash = type(data.trash) == "table" and data.trash or {}
   if type(data.active_list) ~= "string" or not data.lists[data.active_list] then
     data.active_list = "default"
   end
@@ -262,6 +264,31 @@ function M.merge(base, ours, theirs)
     end
   end
   out.lists.default = out.lists.default or M.new_list()
+  -- undo entries: union by id, minus those undone on either side
+  out.trash = {}
+  local seen, base_ids = {}, {}
+  for _, e in ipairs(base.trash or {}) do
+    base_ids[e.id or ""] = true
+  end
+  local function has(t, id)
+    for _, e in ipairs(t or {}) do
+      if e.id == id then
+        return true
+      end
+    end
+  end
+  for _, side in ipairs({ ours.trash or {}, theirs.trash or {} }) do
+    for _, e in ipairs(side) do
+      local undone = base_ids[e.id] and not (has(ours.trash, e.id) and has(theirs.trash, e.id))
+      if e.id and not seen[e.id] and not undone then
+        seen[e.id] = true
+        table.insert(out.trash, e)
+      end
+    end
+  end
+  table.sort(out.trash, function(a, b)
+    return (a.at or 0) < (b.at or 0)
+  end)
   out.active_list = out.lists[ours.active_list] and ours.active_list or "default"
   return out
 end

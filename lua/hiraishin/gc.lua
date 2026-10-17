@@ -18,8 +18,9 @@ local function read_json(path)
   return ok_dec and type(data) == "table" and data or nil
 end
 
+---Kunai in a store, counting deletions that undo could still bring back.
 local function count_kunai(data)
-  local n = 0
+  local n = type(data.trash) == "table" and #data.trash or 0
   for _, list in pairs(type(data.lists) == "table" and data.lists or {}) do
     if type(list) == "table" and type(list.bookmarks) == "table" then
       n = n + vim.tbl_count(list.bookmarks)

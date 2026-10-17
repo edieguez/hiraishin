@@ -285,6 +285,24 @@ T["merge"]["seals: a side that changed one wins"] = function()
   eq(merged, { ["1"] = "c", ["2"] = "b" })
 end
 
+T["merge"]["undo entries: new ones from both sides, undone ones dropped"] = function()
+  local trash = child.lua_get([[(function()
+    local store = require("hiraishin.store")
+    local function data(ids)
+      local t = {}
+      for _, id in ipairs(ids) do
+        table.insert(t, { id = id, at = #t, items = {}, reason = "x" })
+      end
+      return { version = 1, active_list = "default", lists = { default = store.new_list() }, trash = t }
+    end
+    -- base had a and b; we undid b and deleted c; they deleted d
+    local out = store.merge(data({ "a", "b" }), data({ "a", "c" }), data({ "a", "b", "d" }))
+    return vim.tbl_map(function(e) return e.id end, out.trash)
+  end)()]])
+  table.sort(trash)
+  eq(trash, { "a", "c", "d" })
+end
+
 T["project file"] = MiniTest.new_set()
 
 local function trust_and_write(lines)

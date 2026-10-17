@@ -50,7 +50,8 @@ the picker follows your `vim.g.lazyvim_picker`.
 4. `<leader>hf` finds kunai in a picker with preview.
 5. `<leader>he` opens the manager to rename, reorder or delete kunai in bulk.
 
-Removed something by accident? `<leader>hu` brings it back.
+Removed something by accident? `<leader>hu` brings it back, even after a
+restart: each project keeps its last 20 deletions.
 
 ## Keymaps
 

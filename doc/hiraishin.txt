@@ -132,7 +132,9 @@ All commands are subcommands of `:Hiraishin`, with completion.
 
 :Hiraishin undo                                              *:Hiraishin-undo*
     Bring back the last deleted kunai: from toggle, delete, the picker, the
-    manager, prune or a deleted list. Their seal comes back if still free.
+    manager, prune, a cleared seal or a deleted list. Their seal comes back
+    if still free. The history (`undo_history` entries) is kept in the store
+    file, so it survives restarts and each project has its own.
 
 :Hiraishin list [name]                                       *:Hiraishin-list*
 :Hiraishin list delete {name}

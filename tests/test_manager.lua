@@ -269,7 +269,34 @@ T["undo"]["is limited to undo_history entries"] = function()
     place(l)
     child.cmd("Hiraishin toggle")
   end
-  eq(child.lua_get([[require("hiraishin.history").size()]]), 2)
+  eq(child.lua_get([[require("hiraishin.history").size(require("hiraishin.scope").resolve(0))]]), 2)
+end
+
+T["undo"]["survives a restart (kept in the store file)"] = function()
+  main_lua()
+  place(3, "keep")
+  child.cmd("Hiraishin toggle")
+  eq(#child.lua_get([[require("hiraishin").list()]]), 0)
+  -- a fresh Neovim: nothing cached, the store is read from disk again
+  child.lua([[require("hiraishin.store").reset(); require("hiraishin.tracker").reset()]])
+  child.lua([[require("hiraishin.tracker").attach(0)]])
+  child.cmd("Hiraishin undo")
+  eq(child.lua_get([[require("hiraishin").get("keep").line]]), 3)
+  child.lua([[require("hiraishin.store").flush()]])
+  local trash = child.lua_get([[(function()
+    local ctx = require("hiraishin.scope").resolve(0)
+    return vim.json.decode(table.concat(vim.fn.readfile(ctx.store), "\n")).trash
+  end)()]])
+  eq(#trash, 0) -- undone entries leave the file
+end
+
+T["undo"]["is per project"] = function()
+  main_lua()
+  place(3, "a")
+  child.cmd("Hiraishin toggle")
+  child.edit(child.T("proj_b") .. "/app.go", 1)
+  child.cmd("Hiraishin undo")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Nothing to undo")
 end
 
 T["look"] = MiniTest.new_set()
