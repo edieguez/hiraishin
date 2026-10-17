@@ -149,9 +149,9 @@ end
 
 ---@param root string?
 ---@return hiraishin.Context
-local function make(root, abs)
+local function make(root, abs, force_scope)
   local o = config.options
-  local scope_name = M.effective_scope(root)
+  local scope_name = force_scope or M.effective_scope(root)
   local ctx = { scope = scope_name }
   if scope_name == "global" then
     ctx.store = o.storage.dir .. "/global.json"
@@ -204,6 +204,15 @@ function M.for_buf(bufnr)
   local ctx = M.for_path(abs, bufnr)
   buf_cache[bufnr] = { name = abs, ctx = ctx }
   return ctx
+end
+
+---Context of the global store from any scope (global kunai), for a buffer's
+---file when `bufnr` is a file buffer.
+---@param bufnr? integer
+---@return hiraishin.Context
+function M.global_ctx(bufnr)
+  local abs = bufnr and util.buf_path(bufnr == 0 and vim.api.nvim_get_current_buf() or bufnr) or nil
+  return make(nil, abs, "global")
 end
 
 ---Context of the working directory (used when no file buffer is involved).

@@ -26,6 +26,7 @@ M.defaults = {
     style = "nerd",
     icon = false, -- a string overrides the style's icon
     stale_icon = false, -- a string overrides the style's stale icon
+    global_icon = false, -- a string overrides the style's icon for global kunai
     show_slot = true,
     numhl = false,
   },
@@ -41,7 +42,9 @@ M.defaults = {
   name = {
     suggest_from_treesitter = true,
   },
-  note_hover = true, -- show a kunai's note in a float when the cursor rests on it
+  note_hover = true,
+  -- draw kunai of the global store in project/branch buffers too
+  global_kunai = true, -- show a kunai's note in a float when the cursor rests on it
   jump = {
     reuse_window = true, -- jump to a window already showing the file
     center = true, -- zz after jumping
@@ -158,6 +161,8 @@ local function validate(o)
     error("hiraishin: virt_text.show: expected 'cursorline' or 'always'", 0)
   end
   check("note_hover", o.note_hover, "boolean")
+  check("global_kunai", o.global_kunai, "boolean")
+  check("signs.global_icon", o.signs.global_icon, { "string", "boolean" })
   check("jump.flash", o.jump.flash, "boolean")
   check("jump.flash_ms", o.jump.flash_ms, "number")
   check("signs.show_slot", o.signs.show_slot, "boolean")

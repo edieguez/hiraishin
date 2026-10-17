@@ -28,6 +28,8 @@ M.defaults = {
   delete = { lhs = "<leader>hd", desc = "Remove kunai on line", rhs = "<cmd>Hiraishin delete<cr>" },
   pick = { lhs = "<leader>hf", desc = "Find kunai", rhs = "<cmd>Hiraishin pick<cr>" },
   pick_all = { lhs = "<leader>hF", desc = "Find kunai (all lists)", rhs = "<cmd>Hiraishin pick all<cr>" },
+  global = { lhs = "<leader>hg", desc = "Toggle global kunai", rhs = "<cmd>Hiraishin global<cr>" },
+  pick_global = { lhs = "<leader>hG", desc = "Find global kunai", rhs = "<cmd>Hiraishin pick global<cr>" },
   quickfix = { lhs = "<leader>hq", desc = "Kunai to quickfix", rhs = "<cmd>Hiraishin quickfix<cr>" },
   manager = { lhs = "<leader>he", desc = "Edit kunai (manager)", rhs = "<cmd>Hiraishin manager<cr>" },
   list = { lhs = "<leader>hl", desc = "Switch kunai list", rhs = "<cmd>Hiraishin list<cr>" },

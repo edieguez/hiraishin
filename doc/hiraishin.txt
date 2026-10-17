@@ -69,6 +69,8 @@ Set only when the key is free. Override per action with `keymaps`
                                                                 `prev_list`
   <leader>hf      picker                                        `pick`
   <leader>hF      picker, all lists                             `pick_all`
+  <leader>hg      toggle a global kunai on the line             `global`
+  <leader>hG      picker, global kunai                          `pick_global`
   <leader>hq      send kunai to the quickfix list               `quickfix`
   <leader>he      manager                                       `manager`
   <leader>hl      switch list                                   `list`
@@ -120,15 +122,21 @@ All commands are subcommands of `:Hiraishin`, with completion.
     "list", or the next / previous seal in number order with "seal" (off a
     seal, it continues from the last seal jumped to).
 
-:Hiraishin pick [buffer|all]                                 *:Hiraishin-pick*
-    Open the picker (|hiraishin-picker|).
+:Hiraishin pick [buffer|all|global]                          *:Hiraishin-pick*
+    Open the picker (|hiraishin-picker|). "global" lists the global
+    store's kunai from any scope (|hiraishin-global|).
 
 :Hiraishin quickfix [all]                                *:Hiraishin-quickfix*
 :Hiraishin loclist [all]                                  *:Hiraishin-loclist*
     Send the active list (or all lists) to the quickfix / location list.
 
-:Hiraishin manager                                        *:Hiraishin-manager*
-    Edit the active list in a buffer (|hiraishin-manager|).
+:Hiraishin manager [global]                               *:Hiraishin-manager*
+    Edit the active list in a buffer (|hiraishin-manager|); "global" edits
+    the global store's.
+
+:Hiraishin global                                          *:Hiraishin-global*
+    Place a global kunai on the cursor line, or remove the one there
+    (|hiraishin-global|).
 
 :Hiraishin undo                                              *:Hiraishin-undo*
     Bring back the last deleted kunai: from toggle, delete, the picker, the
@@ -231,6 +239,14 @@ Scopes decide where lists are stored:
             the first change. Switching branches swaps the kunai when
             Neovim regains focus.
 
+                                                            *hiraishin-global*
+Global kunai are kunai of the global store used from any scope: places you
+visit from every project (a dotfile, a notes file). |:Hiraishin-global|
+places one from a project; there it is drawn with its own sign (a globe,
+`HiraishinSignGlobal`), follows your edits and is saved on write like any
+other. `:Hiraishin pick global` and `:Hiraishin manager global` reach them
+from anywhere. `global_kunai = false` stops drawing them in projects.
+
 Stores are JSON files under `storage.dir`, written atomically. A store
 another Neovim instance changed is reloaded on |FocusGained|, and a save
 merges what the other instance changed (additions, removals, renames,
@@ -286,6 +302,7 @@ Defaults: >lua
         style = "nerd",           -- "nerd" | "ascii" (* ?) | "emoji" (⚡ !)
         icon = false,             -- a string overrides the style's icon
         stale_icon = false,
+        global_icon = false,      -- sign of a global kunai in a project
         show_slot = true,
         numhl = false,
       },
@@ -300,6 +317,7 @@ Defaults: >lua
       },
       name = { suggest_from_treesitter = true },
       note_hover = true,          -- the note in a float on CursorHold
+      global_kunai = true,        -- draw global kunai in project buffers
       jump = {
         reuse_window = true,
         center = true,
@@ -348,9 +366,9 @@ Defaults: >lua
     h.next({ count?, wrap?, scope? = "buffer"|"list"|"seal" })
     h.prev({ ... })
     h.note()
-    h.pick({ filter? = "buffer"|"all", backend? })
+    h.pick({ filter? = "buffer"|"all"|"global", backend? })
     h.to_quickfix({ loclist?, all? })
-    h.manager()
+    h.manager({ global? })
     h.undo()
     h.lists()                         --> names, active, counts
     h.set_list(name)
@@ -363,7 +381,9 @@ Defaults: >lua
     h.import_marks()
     h.status()
 <
-Copies are returned; change kunai through the API.
+Copies are returned; change kunai through the API. `add`, `toggle`,
+`remove`, `update` and `jump` take `global = true` to work on the global
+store from any scope.
 
 ==============================================================================
 11. EVENTS                                                  *hiraishin-events*
@@ -406,6 +426,7 @@ All link to standard groups and can be overridden:
   HiraishinSign          sign          -> DiagnosticInfo
   HiraishinSignSlot      sealed sign   -> DiagnosticHint
   HiraishinSignStale     stale sign    -> DiagnosticWarn
+  HiraishinSignGlobal    global kunai  -> DiagnosticOk
   HiraishinLine          line          -> CursorLine
   HiraishinVirtText      name / note   -> Comment
   HiraishinFlash         jump flash    -> IncSearch

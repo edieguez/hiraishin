@@ -186,13 +186,13 @@ M.subcommands = {
     -- :Hiraishin pick [buffer|all]
     run = function(args)
       local filter = args[1]
-      if filter and filter ~= "buffer" and filter ~= "all" then
-        return ui.warn("Usage: :Hiraishin pick [buffer|all]")
+      if filter and filter ~= "buffer" and filter ~= "all" and filter ~= "global" then
+        return ui.warn("Usage: :Hiraishin pick [buffer|all|global]")
       end
       require("hiraishin").pick({ filter = filter })
     end,
     complete = function()
-      return { "buffer", "all" }
+      return { "buffer", "all", "global" }
     end,
   },
   quickfix = {
@@ -217,8 +217,26 @@ M.subcommands = {
     end,
   },
   manager = {
+    -- :Hiraishin manager [global]
+    run = function(args)
+      require("hiraishin").manager({ global = args[1] == "global" })
+    end,
+    complete = function()
+      return { "global" }
+    end,
+  },
+  global = {
+    -- :Hiraishin global   place or remove a global kunai on this line
     run = function()
-      require("hiraishin").manager()
+      local bm, action, err = require("hiraishin").toggle({ global = true })
+      if err then
+        return ui.warn(err)
+      end
+      if action == "removed" then
+        ui.info(string.format("Removed global kunai %s · %s", describe(bm), undo_hint()))
+      else
+        ui.info("Global kunai placed · " .. ui.hint("pick_global", ":Hiraishin pick global") .. " finds it anywhere")
+      end
     end,
   },
   undo = {

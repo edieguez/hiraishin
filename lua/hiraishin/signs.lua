@@ -10,6 +10,8 @@ M.ns = vim.api.nvim_create_namespace("hiraishin")
 M.stale_ns = vim.api.nvim_create_namespace("hiraishin_stale")
 -- the name/note shown on the cursor line (virt_text.show = "cursorline")
 M.cursor_ns = vim.api.nvim_create_namespace("hiraishin_cursor")
+-- global kunai drawn in project buffers (hiraishin.global_layer)
+M.global_ns = vim.api.nvim_create_namespace("hiraishin_global")
 -- the brief highlight after a jump
 M.flash_ns = vim.api.nvim_create_namespace("hiraishin_flash")
 
@@ -18,6 +20,15 @@ M.PRESETS = {
   ascii = { icon = "*", stale = "?" },
   emoji = { icon = "⚡", stale = "!" },
 }
+
+-- sign of a global kunai seen from a project, per style
+M.GLOBAL_ICONS = { nerd = "", ascii = "@", emoji = "🌐" }
+
+---@return string
+function M.global_icon()
+  local o = config.options.signs
+  return type(o.global_icon) == "string" and o.global_icon or (M.GLOBAL_ICONS[o.style] or M.GLOBAL_ICONS.nerd)
+end
 
 ---Sign glyphs in use: explicit icons win over the style preset.
 ---@return string icon, string stale_icon
@@ -34,6 +45,7 @@ function M.setup_highlights()
     HiraishinSign = "DiagnosticInfo",
     HiraishinSignSlot = "DiagnosticHint",
     HiraishinSignStale = "DiagnosticWarn",
+    HiraishinSignGlobal = "DiagnosticOk",
     HiraishinLine = "CursorLine",
     HiraishinVirtText = "Comment",
     HiraishinManagerSlot = "HiraishinSignSlot",

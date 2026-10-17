@@ -99,7 +99,7 @@ function M.jump(ctx, bm, list_name, opts)
   end
   -- the file may just have been read and re-anchored: ask for the live line
   local bufnr = vim.api.nvim_win_get_buf(win)
-  local live_ctx = scope.for_buf(bufnr) or ctx
+  local live_ctx = ctx.scope == "global" and ctx or scope.for_buf(bufnr) or ctx
   local line, invalid = tracker.live_line(live_ctx, bm)
   local stale = bm.stale or invalid or not line
   line = line or bm.line

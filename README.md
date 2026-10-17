@@ -91,6 +91,8 @@ turned off (see [Configuration](#configuration)).
 | --- | --- | --- |
 | `<leader>hf` | `:Hiraishin pick [buffer]` | Find a kunai (`buffer`: only this file) |
 | `<leader>hF` | `:Hiraishin pick all` | Find across every list |
+| `<leader>hg` | `:Hiraishin global` | Place or remove a **global** kunai on this line |
+| `<leader>hG` | `:Hiraishin pick global` | Find global kunai from any project |
 | `<leader>he` | `:Hiraishin manager` | Edit the list as a buffer |
 | `<leader>hq` | `:Hiraishin quickfix [all]` | Send the kunai to the quickfix list (`:Hiraishin loclist` for the location list) |
 | `<leader>hl` | `:Hiraishin list [name]` | Switch list, or create one; `list delete {name}` |
@@ -177,6 +179,12 @@ follows the list you are in.
   kunai swap when Neovim regains focus.
 - `global`: one store for everything, with absolute paths.
 
+**Global kunai** are for places you visit from every project, like a
+dotfile or a notes file. `<leader>hg` places one from any project. It shows
+there with a globe sign, follows your edits like any other kunai, and
+`<leader>hG` (or `:Hiraishin manager global`) reaches it from anywhere. Set
+`global_kunai = false` to stop drawing them inside projects.
+
 ### Per-project settings
 
 An empty `.hiraishin` file only marks a project root. It can also return a
@@ -206,7 +214,8 @@ precedence for the current session.
   toasts or `"silent"` for none. Warnings always use `vim.notify`.
 
 Highlight groups, each linked to a default you can override:
-`HiraishinSign`, `HiraishinSignSlot`, `HiraishinSignStale`, `HiraishinLine`,
+`HiraishinSign`, `HiraishinSignSlot`, `HiraishinSignStale`,
+`HiraishinSignGlobal`, `HiraishinLine`,
 `HiraishinVirtText`, `HiraishinFlash`, `HiraishinStatus`,
 `HiraishinManagerSlot`, `HiraishinManagerPath`, `HiraishinManagerSep` and
 `HiraishinManagerHeader`.
@@ -274,6 +283,7 @@ require("hiraishin").setup({
     style = "nerd",               -- "nerd" | "ascii" | "emoji"
     icon = false,                 -- a string overrides the style's icon
     stale_icon = false,
+    global_icon = false,          -- sign of a global kunai inside a project
     show_slot = true,             -- the seal number replaces the icon
     numhl = false,
   },
@@ -288,6 +298,7 @@ require("hiraishin").setup({
   },
   name = { suggest_from_treesitter = true },
   note_hover = true,
+  global_kunai = true,            -- draw global kunai in project buffers
   jump = {
     reuse_window = true,
     center = true,                -- zz
@@ -315,8 +326,9 @@ require("hiraishin").setup({
 
 Keymap overrides: single actions (`toggle`, `add`, `note`, `delete`, `undo`,
 `next`, `prev`, `next_list`, `prev_list`, `next_seal`, `prev_seal`, `pick`,
-`pick_all`, `quickfix`, `manager`, `list`) take a key or `false`. The
-nine-key groups `assign_slot` and `jump_slot` take a prefix or `false`:
+`pick_all`, `global`, `pick_global`, `quickfix`, `manager`, `list`) take a key
+or `false`. The nine-key groups `assign_slot` and `jump_slot` take a prefix or
+`false`:
 
 ```lua
 keymaps = {
@@ -341,7 +353,7 @@ h.jump(name_or_seal, { split? })
 h.next({ count?, wrap?, scope? = "buffer"|"list"|"seal" })
 h.prev({ ... })
 h.note()
-h.pick({ filter? = "buffer"|"all", backend? })
+h.pick({ filter? = "buffer"|"all"|"global", backend? })
 h.to_quickfix({ loclist?, all? })
 h.get(id_or_name)
 h.list({ bufnr?, include_stale? })          -- with live line numbers
@@ -350,7 +362,7 @@ h.relocate(id_or_name, { bufnr?, line? })
 h.stale({ all? })                           --> { { bookmark, list }, ... }
 h.prune()
 h.rename(from, to)
-h.manager()
+h.manager({ global? })                       -- add/toggle/remove/update/jump take global = true too
 h.undo()
 h.lists()                                   --> names, active, counts
 h.set_list(name)

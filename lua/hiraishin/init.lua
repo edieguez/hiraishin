@@ -166,15 +166,35 @@ end
 
 ---Context of a file buffer, making sure the tracker follows it.
 ---@return hiraishin.Context?, string?
-local function buf_ctx(bufnr)
+local function buf_ctx(bufnr, global)
   if bufnr == nil or bufnr == 0 then
     bufnr = vim.api.nvim_get_current_buf()
+  end
+  if global then
+    local abs, err = util.buf_path(bufnr)
+    if not abs then
+      return nil, err
+    end
+    if not tracker.is_tracked(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
+      tracker.attach(bufnr)
+    end
+    return scope.global_ctx(bufnr)
   end
   local ctx, err = scope.for_buf(bufnr)
   if ctx and not tracker.is_tracked(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
     tracker.attach(bufnr)
   end
   return ctx, err
+end
+
+---Store context for an operation: the global store with `opts.global`
+---(global kunai from any scope), otherwise the buffer's scope.
+---@param opts { bufnr?: integer, global?: boolean }
+local function resolve(opts)
+  if opts.global then
+    return scope.global_ctx(opts.bufnr or 0)
+  end
+  return scope.resolve(opts.bufnr)
 end
 
 ---@param ctx hiraishin.Context
@@ -211,7 +231,7 @@ function M.add(opts)
   ensure_setup()
   opts = opts or {}
   local bufnr, line, col = target(opts)
-  local ctx, err = buf_ctx(bufnr)
+  local ctx, err = buf_ctx(bufnr, opts.global)
   if not ctx then
     return nil, err
   end
@@ -267,7 +287,7 @@ end
 function M.remove(key, opts)
   ensure_setup()
   opts = opts or {}
-  local ctx = scope.resolve(opts.bufnr)
+  local ctx = resolve(opts)
   local list, list_name = list_ops.active(store.get(ctx))
   local bm = list_ops.find(list, key)
   if not bm then
@@ -288,17 +308,17 @@ function M.toggle(opts)
   ensure_setup()
   opts = opts or {}
   local bufnr, line = target(opts)
-  local ctx, err = buf_ctx(bufnr)
+  local ctx, err = buf_ctx(bufnr, opts.global)
   if not ctx then
     return nil, nil, err
   end
   local list = list_ops.active(store.get(ctx))
   local existing = list_ops.find_at(list, ctx.file, line, line_fn(ctx))
   if existing then
-    local removed = M.remove(existing.id, { bufnr = bufnr, reason = "toggle" })
+    local removed = M.remove(existing.id, { bufnr = bufnr, reason = "toggle", global = opts.global })
     return removed, "removed"
   end
-  local bm, add_err = M.add({ bufnr = bufnr, line = line, col = opts.col })
+  local bm, add_err = M.add({ bufnr = bufnr, line = line, col = opts.col, global = opts.global })
   return bm, bm and "added" or nil, add_err
 end
 
@@ -320,7 +340,7 @@ end
 function M.update(key, fields, opts)
   ensure_setup()
   opts = opts or {}
-  local ctx = scope.resolve(opts.bufnr)
+  local ctx = resolve(opts)
   local list, list_name = list_ops.active(store.get(ctx))
   local bm = list_ops.find(list, key)
   if not bm then
@@ -420,7 +440,7 @@ end
 function M.slot_of(key, opts)
   ensure_setup()
   opts = opts or {}
-  local list = list_ops.active(store.get(scope.resolve(opts.bufnr)))
+  local list = list_ops.active(store.get(resolve(opts)))
   local bm = list_ops.find(list, key)
   local slot = bm and list_ops.slot_of(list, bm.id)
   return slot and tonumber(slot) or nil
@@ -448,7 +468,7 @@ end
 ---Resolve a jump target: a seal number (1..9) or an id/name.
 ---@return hiraishin.Context?, hiraishin.Bookmark?, string? list_name, string? err
 local function resolve_target(key, opts)
-  local ctx = scope.resolve(opts.bufnr)
+  local ctx = resolve(opts)
   local list, list_name = list_ops.active(store.get(ctx))
   local slot = slot_key(key)
   local bm
@@ -555,7 +575,7 @@ end
 function M.get(key, opts)
   ensure_setup()
   opts = opts or {}
-  local ctx = scope.resolve(opts.bufnr)
+  local ctx = resolve(opts)
   local list = list_ops.active(store.get(ctx))
   local bm = list_ops.find(list, key)
   return bm and snapshot(ctx, bm) or nil
@@ -568,7 +588,7 @@ end
 function M.list(opts)
   ensure_setup()
   opts = opts or {}
-  local ctx = scope.resolve(opts.bufnr)
+  local ctx = resolve(opts)
   local list = list_ops.active(store.get(ctx))
   local file = opts.bufnr and ctx.file or nil
   local out = {}
@@ -600,7 +620,7 @@ end
 function M.stale(opts)
   ensure_setup()
   opts = opts or {}
-  local ctx = scope.resolve(opts.bufnr)
+  local ctx = resolve(opts)
   local data = store.get(ctx)
   local out = {}
   local names = opts.all and vim.tbl_keys(data.lists) or { data.active_list }
@@ -622,7 +642,7 @@ end
 function M.prune(opts)
   ensure_setup()
   opts = vim.tbl_extend("force", { all = true }, opts or {})
-  local ctx = scope.resolve(opts.bufnr)
+  local ctx = resolve(opts)
   local data = store.get(ctx)
   local removed = M.stale(opts)
   local items = {}
@@ -649,7 +669,7 @@ function M.relocate(key, opts)
   ensure_setup()
   opts = opts or {}
   local bufnr, line = target(opts)
-  local ctx, err = buf_ctx(bufnr)
+  local ctx, err = buf_ctx(bufnr, opts.global)
   if not ctx then
     return nil, err
   end
@@ -686,7 +706,19 @@ end
 ---@return integer? restored, string? err_or_notice
 function M.undo()
   ensure_setup()
+  -- the latest deletion here, or of a global kunai seen from here
   local ctx = scope.resolve(0)
+  if ctx.scope ~= "global" and config.options.global_kunai then
+    local g = scope.global_ctx()
+    local function last_at(c)
+      local t = store.get(c).trash or {}
+      return t[#t] and t[#t].at or nil
+    end
+    local ga, pa = last_at(g), last_at(ctx)
+    if ga and (not pa or ga > pa) then
+      ctx = g
+    end
+  end
   local entry = history.pop(ctx)
   if not entry then
     return nil, "Nothing to undo"
@@ -769,7 +801,7 @@ end
 function M.lists(opts)
   ensure_setup()
   opts = opts or {}
-  local data = store.get(scope.resolve(opts.bufnr))
+  local data = store.get(resolve(opts))
   local names, counts = {}, {}
   for name, list in pairs(data.lists) do
     table.insert(names, name)
@@ -790,7 +822,7 @@ function M.set_list(name, opts)
   if not name then
     return nil, "A list needs a name"
   end
-  local ctx = scope.resolve(opts.bufnr)
+  local ctx = resolve(opts)
   local data = store.get(ctx)
   local previous = data.active_list
   local created = data.lists[name] == nil
@@ -811,7 +843,7 @@ function M.delete_list(name, opts)
   if name == "default" then
     return nil, "The default list cannot be deleted"
   end
-  local ctx = scope.resolve(opts.bufnr)
+  local ctx = resolve(opts)
   local data = store.get(ctx)
   local list = data.lists[name]
   if not list then

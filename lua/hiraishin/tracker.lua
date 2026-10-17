@@ -156,6 +156,7 @@ function M.attach(bufnr)
     return
   end
   tracked[bufnr] = { ctx = ctx, marks = {}, looks = {} }
+  require("hiraishin.global_layer").attach(bufnr, ctx)
   local data = store.get(ctx)
   local items = entries(data, ctx.file)
   if #items == 0 then
@@ -207,6 +208,7 @@ function M.detach(bufnr)
     vim.api.nvim_buf_clear_namespace(bufnr, signs.stale_ns, 0, -1)
     vim.api.nvim_buf_clear_namespace(bufnr, signs.cursor_ns, 0, -1)
   end
+  require("hiraishin.global_layer").detach(bufnr)
   tracked[bufnr] = nil
 end
 
@@ -286,6 +288,7 @@ function M.sync(bufnr)
     store.changed(t.ctx)
   end
   M.render(bufnr)
+  require("hiraishin.global_layer").sync(bufnr)
 end
 
 ---Tracked buffers showing a context's file (or every tracked buffer of the store).
@@ -365,6 +368,13 @@ function M.live_line(ctx, bm)
         return row + 1, false
       end
       break
+    end
+  end
+  if ctx.scope == "global" then
+    -- a global kunai drawn in a project buffer
+    local line, invalid = require("hiraishin.global_layer").live_line(bm)
+    if invalid ~= nil then
+      return line, invalid
     end
   end
   if bm.stale then

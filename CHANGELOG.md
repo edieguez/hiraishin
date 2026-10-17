@@ -16,6 +16,10 @@
   elsewhere, keeping the cursor on its kunai
 - Tests drive fzf-lua with a real fzf (skipped when fzf is missing); CI
   installs fzf
+- Global kunai inside projects: `:Hiraishin global` / `<leader>hg` places a
+  kunai in the global store from any scope; it is drawn (globe sign),
+  tracked and saved in project buffers; `pick global` / `<leader>hG` and
+  `manager global` reach them anywhere; undo covers them (`global_kunai`)
 
 ### UX and UI pass
 - Seals are quick jumps: sealing a bare line makes a kunai just for the seal,

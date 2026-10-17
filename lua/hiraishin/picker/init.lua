@@ -24,7 +24,7 @@ local M = {}
 ---@field ordinal string text used for fuzzy matching
 
 ---@class hiraishin.PickOpts
----@field filter? "buffer"|"all"  default: active list
+---@field filter? "buffer"|"all"|"global"  default: active list; global: the global store's
 ---@field backend? string
 ---@field bufnr? integer           context buffer (default: current)
 
@@ -123,7 +123,7 @@ local SORTERS = {
 ---@return hiraishin.Entry[], hiraishin.Context
 function M.entries(opts)
   opts = opts or {}
-  local ctx = scope.resolve(opts.bufnr)
+  local ctx = opts.filter == "global" and scope.global_ctx() or scope.resolve(opts.bufnr)
   local data = store.get(ctx)
   local names = opts.filter == "all" and vim.tbl_keys(data.lists) or { data.active_list }
   table.sort(names)
@@ -337,6 +337,8 @@ function M.title(opts, ctx, count)
   local what
   if opts.filter == "all" then
     what = "all lists"
+  elseif opts.filter == "global" then
+    what = "global"
   elseif opts.filter == "buffer" then
     what = "this file"
   else

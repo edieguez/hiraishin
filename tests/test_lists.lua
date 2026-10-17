@@ -313,4 +313,77 @@ T["gc"]["finds and deletes store files nobody needs"] = function()
   eq(child.lua_get([[require("hiraishin.ui").last()]]), "No store files to clean up")
 end
 
+T["global kunai"] = MiniTest.new_set()
+
+local function global_signs()
+  return child.lua_get([[(function()
+    local out = {}
+    for _, m in ipairs(vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").global_ns, 0, -1, { details = true })) do
+      if not m[4].invalid then
+        out[tostring(m[2] + 1)] = vim.trim(m[4].sign_text or "")
+      end
+    end
+    return out
+  end)()]])
+end
+local function global_store()
+  child.lua([[require("hiraishin.store").flush()]])
+  return child.lua_get([[vim.json.decode(table.concat(vim.fn.readfile(T.storage .. "/global.json"), "\n"))]])
+end
+
+T["global kunai"]["placed from a project, drawn and tracked there"] = function()
+  main_lua(3)
+  child.cmd("Hiraishin global")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Global kunai placed · <leader>hG finds it anywhere")
+  eq(global_signs(), { ["3"] = "🌐" })
+  eq(child.signs(), {}) -- not a project kunai
+  local _, bm = next(global_store().lists.default.bookmarks)
+  eq({ bm.file, bm.line }, { child.T("proj_a") .. "/src/main.lua", 3 })
+  -- follows edits and is saved on write
+  child.api.nvim_buf_set_lines(0, 0, 0, false, { "-- a", "-- b" })
+  eq(global_signs(), { ["5"] = "🌐" })
+  child.cmd("write")
+  _, bm = next(global_store().lists.default.bookmarks)
+  eq(bm.line, 5)
+end
+
+T["global kunai"]["are found again after outside changes"] = function()
+  main_lua(3)
+  child.cmd("Hiraishin global")
+  child.cmd("bwipeout!")
+  child.lua([[local p = T.proj_a .. "/src/main.lua"
+    local l = vim.fn.readfile(p); table.insert(l, 1, "-- new"); vim.fn.writefile(l, p)]])
+  main_lua(1)
+  eq(global_signs(), { ["4"] = "🌐" })
+end
+
+T["global kunai"]["picker, jump, manager and undo"] = function()
+  main_lua(3)
+  child.lua([[require("hiraishin").add({ global = true, name = "everywhere" })]])
+  child.edit(child.T("proj_b") .. "/app.go", 1)
+  local entries = child.lua_get([[vim.tbl_map(function(e) return e.bookmark.name end,
+    (require("hiraishin.picker").entries({ filter = "global" })))]])
+  eq(entries, { "everywhere" })
+  child.lua([[vim.ui.select = function(items, opts, cb) _G.prompt = opts.prompt; cb(items[1]) end]])
+  child.cmd("Hiraishin pick global")
+  eq(child.lua_get("_G.prompt"), "Kunai · global (1)")
+  eq({ vim.fs.basename(child.api.nvim_buf_get_name(0)), child.api.nvim_win_get_cursor(0)[1] }, { "main.lua", 3 })
+  child.cmd("Hiraishin manager global")
+  eq(child.api.nvim_buf_get_lines(0, 0, -1, false)[1]:match("everywhere") ~= nil, true)
+  child.cmd("q")
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  child.cmd("Hiraishin global") -- removes it
+  eq(global_signs(), {})
+  child.cmd("Hiraishin undo")
+  eq(global_signs(), { ["3"] = "🌐" })
+end
+
+T["global kunai"]["can be hidden in projects"] = function()
+  child.lua([[require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 }, global_kunai = false })]])
+  main_lua(3)
+  child.lua([[require("hiraishin").add({ global = true })]])
+  child.cmd("edit!")
+  eq(global_signs(), {})
+end
+
 return T

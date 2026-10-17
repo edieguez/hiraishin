@@ -438,14 +438,14 @@ local function cycle_list(state, step)
 end
 
 ---Open the manager for the active list (or `opts.list`).
----@param opts? { list?: string }
+---@param opts? { list?: string, global?: boolean } global: the global store's kunai
 ---@return hiraishin.ManagerState
 function M.open(opts)
   opts = opts or {}
   if current then
     close(current, true)
   end
-  local ctx = scope.resolve(0)
+  local ctx = opts.global and scope.global_ctx() or scope.resolve(0)
   local data = store.get(ctx)
   local o = config.options.manager
 

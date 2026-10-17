@@ -212,6 +212,7 @@ T["commands"]["completes subcommands and names"] = function()
     "add",
     "delete",
     "gc",
+    "global",
     "import",
     "jump",
     "list",
