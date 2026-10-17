@@ -3,6 +3,12 @@
 Versions are git tags (`git checkout v0.6.0`). Dates are when the version
 was tagged.
 
+## v0.8.0 — 2026-10-17
+
+- **Breaking:** next / previous kunai moved from `]m` `[m` `]M` `[M` to
+  `]k` `[k` `]K` `[K`, so Vim's "next method" motions work again. To keep the
+  old keys: `keymaps = { next = "]m", prev = "[m", next_list = "]M", prev_list = "[M" }`
+
 ## v0.7.1 — 2026-10-17
 
 - Fix: the fzf-lua picker ignored `picker.show_notes` and `virt_text.note_icon`

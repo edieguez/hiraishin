@@ -88,8 +88,8 @@ turned off (see [Configuration](#configuration)).
 
 | Key | Command | Action |
 | --- | --- | --- |
-| `]m` / `[m` | `:Hiraishin next` / `prev` | Next / previous kunai in this buffer (takes a count) |
-| `]M` / `[M` | `:Hiraishin next list` / `prev list` | Next / previous kunai across files, in list order |
+| `]k` / `[k` | `:Hiraishin next` / `prev` | Next / previous kunai in this buffer (takes a count) |
+| `]K` / `[K` | `:Hiraishin next list` / `prev list` | Next / previous kunai across files, in list order |
 | | `:Hiraishin jump {name} [vsplit\|split\|tab]` | Jump by name |
 
 **Finding and editing**
@@ -111,8 +111,9 @@ of deleted projects and branches, and empty ones, after asking) and
 `:Hiraishin import marks` (turn global marks A–Z into kunai). A bare
 `:Hiraishin` opens the picker.
 
-> `]m` / `[m` replace Vim's "next method start" motions. To keep those, set
-> `keymaps = { next = false, prev = false }`.
+> Until v0.7.1 these were `]m` / `[m` / `]M` / `[M`, which hid Vim's "next
+> method" motions. To keep the old keys, set
+> `keymaps = { next = "]m", prev = "[m", next_list = "]M", prev_list = "[M" }`.
 
 ## Seals
 

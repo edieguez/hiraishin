@@ -280,17 +280,19 @@ T["next / prev"]["count and no-wrap"] = function()
   eq(cursor()[1], 5)
 end
 
-T["next / prev"]["]m and [m take a count"] = function()
+T["next / prev"]["]k and [k take a count; ]m is left to Vim"] = function()
   child.lua([[vim.g.mapleader = " "; require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 } })]])
   main_lua()
   place(1)
   place(3)
   place(5)
   child.api.nvim_win_set_cursor(0, { 1, 0 })
-  child.type_keys("2", "]", "m")
+  child.type_keys("2", "]", "k")
   eq(cursor()[1], 5)
-  child.type_keys("[", "m")
+  child.type_keys("[", "k")
   eq(cursor()[1], 3)
+  eq(child.fn.maparg("]m", "n"), "")
+  eq(child.fn.maparg("]K", "n") ~= "", true)
 end
 
 T["next / prev"]["list order walks across files"] = function()
@@ -460,7 +462,7 @@ T["keymaps"] = function()
   child.api.nvim_win_set_cursor(0, { 1, 0 })
   child.type_keys(" ", "4")
   eq(cursor()[1], 3)
-  for _, lhs in ipairs({ "<leader>hn", "]M", "[M", "<leader>h9", "<leader>9" }) do
+  for _, lhs in ipairs({ "<leader>hn", "]K", "[K", "<leader>h9", "<leader>9" }) do
     eq(child.lua_get("vim.fn.maparg(..., 'n') ~= ''", { lhs }), true)
   end
   child.lua(

@@ -46,28 +46,28 @@ M.defaults = {
   list = { lhs = "<leader>hl", desc = "Switch kunai list", rhs = "<cmd>Hiraishin list<cr>" },
   undo = { lhs = "<leader>hu", desc = "Undo kunai deletion", rhs = "<cmd>Hiraishin undo<cr>" },
   next = {
-    lhs = "]m",
+    lhs = "]k",
     desc = "Next kunai in buffer",
     rhs = function()
       report(h().next({ count = vim.v.count1 }))
     end,
   },
   prev = {
-    lhs = "[m",
+    lhs = "[k",
     desc = "Previous kunai in buffer",
     rhs = function()
       report(h().prev({ count = vim.v.count1 }))
     end,
   },
   next_list = {
-    lhs = "]M",
+    lhs = "]K",
     desc = "Next kunai in list",
     rhs = function()
       report(h().next({ count = vim.v.count1, scope = "list" }))
     end,
   },
   prev_list = {
-    lhs = "[M",
+    lhs = "[K",
     desc = "Previous kunai in list",
     rhs = function()
       report(h().prev({ count = vim.v.count1, scope = "list" }))

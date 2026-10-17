@@ -64,8 +64,8 @@ Set only when the key is free. Override per action with `keymaps`
   <leader>1..9    jump to that seal                             `jump_slot`
   <leader>hj      next seal (1 -> 9)                            `next_seal`
   <leader>hk      previous seal                                 `prev_seal`
-  ]m  [m          next / previous kunai in the buffer           `next` `prev`
-  ]M  [M          next / previous kunai in the list             `next_list`
+  ]k  [k          next / previous kunai in the buffer           `next` `prev`
+  ]K  [K          next / previous kunai in the list             `next_list`
                                                                 `prev_list`
   <leader>hf      picker                                        `pick`
   <leader>hF      picker, all lists                             `pick_all`
@@ -79,8 +79,10 @@ Set only when the key is free. Override per action with `keymaps`
 In Visual mode <leader>hh and <leader>ha place a range kunai over the
 selected lines (|hiraishin-ranges|).
 
-`]m` and `[m` take a count. They replace Vim's "next method start" motions;
-`keymaps = { next = false, prev = false }` keeps those.
+`]k` `[k` `]K` `[K` take a count. Before v0.8.0 they were `]m` `[m` `]M`
+`[M`; to keep those: >lua
+    keymaps = { next = "]m", prev = "[m", next_list = "]M", prev_list = "[M" }
+<
 
 The nine-key groups take a prefix or false: >lua
     keymaps = { jump_slot = "<leader>j", assign_slot = false }
@@ -209,7 +211,7 @@ header: >
 Edit it like text, then |:w| applies everything at once:
 
   - change the seal (1-9 or -), the name (- for none) or the note
-  - reorder lines to reorder the list (used by ]M [M and `sort = "manual"`)
+  - reorder lines to reorder the list (used by ]K [K and `sort = "manual"`)
   - delete lines to delete kunai (|:Hiraishin-undo| brings them back;
     `manager.confirm_delete` asks first)
 
