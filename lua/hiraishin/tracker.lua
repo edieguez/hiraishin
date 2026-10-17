@@ -19,6 +19,14 @@ local ns = signs.ns
 ---@type table<integer, hiraishin.Tracked>
 local tracked = {}
 
+---Buffer 0 means "current"; every table here is keyed by the real number.
+local function real(bufnr)
+  if bufnr == nil or bufnr == 0 then
+    return vim.api.nvim_get_current_buf()
+  end
+  return bufnr
+end
+
 local function buf_lines(bufnr)
   return vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 end
@@ -66,6 +74,7 @@ end
 ---Redraw signs of every kunai in the buffer without moving any mark.
 ---@param bufnr integer
 function M.render(bufnr)
+  bufnr = real(bufnr)
   local t = tracked[bufnr]
   if not t or not vim.api.nvim_buf_is_loaded(bufnr) then
     return
@@ -109,6 +118,7 @@ end
 ---Runs when a file is read (also on :e! and external reloads).
 ---@param bufnr integer
 function M.attach(bufnr)
+  bufnr = real(bufnr)
   M.detach(bufnr)
   local ctx = scope.for_buf(bufnr)
   if not ctx or not vim.api.nvim_buf_is_loaded(bufnr) then
@@ -160,6 +170,7 @@ end
 
 ---@param bufnr integer
 function M.detach(bufnr)
+  bufnr = real(bufnr)
   if vim.api.nvim_buf_is_valid(bufnr) then
     vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
     vim.api.nvim_buf_clear_namespace(bufnr, signs.stale_ns, 0, -1)
@@ -170,6 +181,7 @@ end
 ---Write live positions back to the store. Runs on BufWritePost.
 ---@param bufnr integer
 function M.sync(bufnr)
+  bufnr = real(bufnr)
   local t = tracked[bufnr]
   if not t then
     return M.attach(bufnr)
@@ -290,6 +302,7 @@ end
 ---Point a tracked buffer at its (possibly renamed) file, keeping live marks.
 ---@param bufnr integer
 function M.retarget(bufnr)
+  bufnr = real(bufnr)
   local t = tracked[bufnr]
   if not t then
     return
@@ -331,6 +344,7 @@ end
 ---@param bufnr integer
 ---@return boolean
 function M.is_tracked(bufnr)
+  bufnr = real(bufnr)
   return tracked[bufnr] ~= nil
 end
 

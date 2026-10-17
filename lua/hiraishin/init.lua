@@ -126,6 +126,9 @@ end
 ---Context of a file buffer, making sure the tracker follows it.
 ---@return hiraishin.Context?, string?
 local function buf_ctx(bufnr)
+  if bufnr == nil or bufnr == 0 then
+    bufnr = vim.api.nvim_get_current_buf()
+  end
   local ctx, err = scope.for_buf(bufnr)
   if ctx and not tracker.is_tracked(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
     tracker.attach(bufnr)

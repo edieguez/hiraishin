@@ -280,4 +280,21 @@ T["keymaps"]["can be overridden or disabled"] = function()
   eq(child.lua_get([[vim.fn.maparg("<leader>hh", "n")]]), "")
 end
 
+
+T["regressions"] = MiniTest.new_set()
+
+T["regressions"]["naming a placed kunai draws its name once (bufnr 0 was tracked twice)"] = function()
+  main_lua(3)
+  child.lua([[vim.ui.input = function(_, cb) cb("Sample name") end]])
+  child.cmd("Hiraishin toggle")
+  child.cmd("Hiraishin! add")
+  child.cmd("Hiraishin seal 2")
+  local marks = child.lua_get([[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").ns, 0, -1, { details = true })]])
+  eq(#marks, 1)
+  eq(marks[1][4].sign_text, "2 ")
+  child.cmd("redraw")
+  local _, n = vim.split(tostring(child.get_screenshot()), "\n")[4]:gsub("Sample name", "")
+  eq(n, 1)
+end
+
 return T
