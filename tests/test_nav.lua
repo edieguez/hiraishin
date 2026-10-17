@@ -462,8 +462,8 @@ T["keymaps"] = function()
   child.api.nvim_win_set_cursor(0, { 1, 0 })
   child.type_keys("g", "4")
   eq(cursor()[1], 3)
-  for _, lhs in ipairs({ "<leader>hn", "]K", "[K", "m9", "g9", "mm", "g<Space>" }) do
-    eq(child.lua_get("vim.fn.maparg(..., 'n') ~= ''", { lhs }), true)
+  for _, lhs in ipairs({ "<leader>hn", "]K", "[K", "m9", "g9", "mm", "m0", "g<Space>" }) do
+    eq({ lhs, child.lua_get("require('hiraishin.keymaps').is_set(...)", { lhs }) }, { lhs, true })
   end
   -- seal keys are not on the leader any more; Vim's own marks still work
   eq(child.lua_get([[vim.fn.maparg("<leader>3", "n")]]), "")
@@ -475,7 +475,7 @@ T["keymaps"] = function()
   )
   eq(child.lua_get([[vim.fn.maparg("<leader>j3", "n") ~= ""]]), true)
   eq(child.lua_get([[vim.fn.maparg("g3", "n")]]), "")
-  eq(child.lua_get([[vim.fn.maparg("m3", "n")]]), "")
+  eq(child.lua_get([[require("hiraishin.keymaps").is_set("m3")]]), false)
 end
 
 local function cursor_virt()
@@ -713,6 +713,47 @@ T["camp"]["survives a restart"] = function()
   child.lua([[require("hiraishin.store").reset(); require("hiraishin.tracker").reset()]])
   child.cmd("edit!")
   eq(camp_sign(), { ["3"] = "⛺" })
+end
+
+T["the m key waits"] = function()
+  child.lua([[vim.o.timeoutlen = 100]])
+  main_lua(3)
+  -- far slower than 'timeoutlen'
+  child.type_keys("m")
+  vim.loop.sleep(400)
+  child.type_keys("0")
+  eq(child.lua_get([[require("hiraishin").camp() ~= nil]]), true)
+  child.api.nvim_win_set_cursor(0, { 5, 0 })
+  child.type_keys("m")
+  vim.loop.sleep(400)
+  child.type_keys("4")
+  eq(child.lua_get([[require("hiraishin").slot_of(require("hiraishin").at_cursor().id)]]), 4)
+  -- other keys are Vim's marks, also when typed slowly
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("m")
+  vim.loop.sleep(400)
+  child.type_keys("q")
+  eq(child.fn.line("'q"), 1)
+  child.type_keys("m", "<Esc>") -- cancels
+  eq(child.api.nvim_get_mode().mode, "n")
+end
+
+T["another plugin's m mapping is left alone"] = function()
+  child.lua([[vim.keymap.set("n", "m", "<Nop>", { desc = "someone else" })]])
+  child.lua([[require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 } })]])
+  eq(child.lua_get([[vim.fn.maparg("m", "n", false, true).desc]]), "someone else")
+  eq(child.lua_get([[vim.fn.maparg("m3", "n") ~= ""]]), true) -- plain m{char} mappings instead
+end
+
+T["keys taken only in the current buffer don't block the defaults"] = function()
+  -- e.g. a dashboard that maps <BS> for itself while hiraishin loads
+  child.lua([[vim.keymap.set("n", "<BS>", "<Nop>", { buffer = 0 })
+    vim.keymap.set("n", "m", "<Nop>", { buffer = 0 })
+    require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 } })]])
+  child.cmd("enew")
+  eq(child.lua_get([[require("hiraishin.keymaps").is_set("<BS>")]]), true)
+  eq(child.lua_get([[require("hiraishin.keymaps").is_set("m0")]]), true)
+  eq(child.lua_get([[vim.fn.maparg("m", "n", false, true).desc]]):match("^hiraishin") ~= nil, true)
 end
 
 return T

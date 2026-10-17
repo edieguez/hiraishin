@@ -82,11 +82,8 @@ function M.check()
     local skipped = {}
     for action, def in pairs(require("hiraishin.keymaps").defaults) do
       local lhs = type(o.keymaps) == "table" and o.keymaps[action] or def.lhs
-      if lhs then
-        local map = vim.fn.maparg(lhs, "n", false, true)
-        if map.desc == nil or not vim.startswith(map.desc, "hiraishin: ") then
-          table.insert(skipped, string.format("%s (%s)", lhs, action))
-        end
+      if lhs and not require("hiraishin.keymaps").is_set(lhs) then
+        table.insert(skipped, string.format("%s (%s)", lhs, action))
       end
     end
     if #skipped > 0 then

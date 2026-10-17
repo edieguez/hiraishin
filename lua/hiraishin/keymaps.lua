@@ -160,6 +160,62 @@ function M.lhs_of(action)
   return by_action[action]
 end
 
+---Global mapping of `lhs`, ignoring buffer-local ones (setup runs in whatever
+---buffer is current: a dashboard's keys must not keep hiraishin's from being set).
+---@return table maparg dict, empty when none
+local function global_map(lhs, mode)
+  local buf = vim.api.nvim_create_buf(false, true)
+  local map = {}
+  vim.api.nvim_buf_call(buf, function()
+    map = vim.fn.maparg(lhs, mode, false, true)
+  end)
+  vim.api.nvim_buf_delete(buf, { force = true })
+  return map
+end
+
+local function is_free(lhs, mode)
+  return vim.tbl_isempty(global_map(lhs, mode))
+end
+
+-- m{char} keys (m1..m9, mm, m0) are served by one `m` mapping that waits for
+-- the next key as long as it takes: separate m{char} mappings would fall back
+-- to Vim's own `m` after 'timeoutlen'. Any other key still sets a Vim mark.
+---@type table<string, { rhs: string|function, desc: string }>
+local m_keys = {}
+
+local function m_dispatch()
+  local ok, ch = pcall(vim.fn.getcharstr)
+  if not ok or ch == "" or ch == "\27" then
+    return
+  end
+  local own = m_keys[ch]
+  if own then
+    if type(own.rhs) == "function" then
+      return own.rhs()
+    end
+    return vim.api.nvim_feedkeys(vim.keycode(own.rhs), "m", false)
+  end
+  -- another mapping starting with m, or Vim's own mark
+  local other = vim.fn.maparg("m" .. ch, "n", false, true)
+  if other.callback then
+    return other.callback()
+  elseif other.rhs and other.rhs ~= "" then
+    return vim.api.nvim_feedkeys(vim.keycode(other.rhs), other.noremap == 1 and "n" or "m", false)
+  end
+  vim.api.nvim_feedkeys("m" .. ch, "n", false)
+end
+
+---True when `lhs` is served by hiraishin (directly or through the m key).
+---@param lhs string
+---@return boolean
+function M.is_set(lhs)
+  if lhs:match("^m.$") and m_keys[lhs:sub(2)] then
+    return true
+  end
+  local map = global_map(lhs, "n")
+  return map.desc ~= nil and vim.startswith(map.desc, "hiraishin: ")
+end
+
 local function clear()
   for _, a in ipairs(applied) do
     local map = vim.fn.maparg(a.lhs, a.mode, false, true)
@@ -170,14 +226,25 @@ local function clear()
   end
   applied = {}
   by_action = {}
+  m_keys = {}
 end
 
 local function set(lhs, rhs, desc, forced, action, mode)
   mode = mode or "n"
+  if mode == "n" and lhs:match("^m.$") then
+    -- served by the waiting `m` key (see m_dispatch)
+    if forced or is_free(lhs, mode) then
+      m_keys[lhs:sub(2)] = { rhs = rhs, desc = desc }
+      if action then
+        by_action[action] = lhs
+      end
+    end
+    return
+  end
   -- user overrides always win; defaults never clobber an existing mapping
-  if forced or vim.fn.maparg(lhs, mode) == "" then
+  if forced or is_free(lhs, mode) then
     vim.keymap.set(mode, lhs, rhs, { desc = DESC_PREFIX .. desc, silent = true })
-    table.insert(applied, { mode = mode, lhs = vim.fn.maparg(lhs, mode, false, true).lhs or lhs })
+    table.insert(applied, { mode = mode, lhs = global_map(lhs, mode).lhs or lhs })
     if action and mode == "n" then
       by_action[action] = lhs
     end
@@ -211,6 +278,24 @@ function M.setup()
     if prefix then
       for n = 1, 9 do
         set(prefix .. n, def.rhs(n), def.desc:format(n), overrides[group] ~= nil, group .. "_" .. n)
+      end
+    end
+  end
+  if next(m_keys) then
+    local cur = global_map("m", "n")
+    if vim.tbl_isempty(cur) or (cur.desc or ""):find("which-key-trigger", 1, true) then
+      vim.keymap.set(
+        "n",
+        "m",
+        m_dispatch,
+        { desc = DESC_PREFIX .. "Seal (m1-m9, mm), camp (m0) or Vim mark", nowait = true }
+      )
+      table.insert(applied, { mode = "n", lhs = "m" })
+    else
+      -- something else owns `m`: fall back to plain m{char} mappings
+      for ch, k in pairs(m_keys) do
+        vim.keymap.set("n", "m" .. ch, k.rhs, { desc = DESC_PREFIX .. k.desc, silent = true })
+        table.insert(applied, { mode = "n", lhs = "m" .. ch })
       end
     end
   end

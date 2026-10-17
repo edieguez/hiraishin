@@ -3,6 +3,15 @@
 Versions are git tags (`git checkout v0.6.0`). Dates are when the version
 was tagged.
 
+## v0.10.1 — 2026-10-17
+
+- Fix: `m0`, `mm` and `m1`…`m9` only worked when typed faster than
+  'timeoutlen'; one `m` mapping now waits for the next key as long as it
+  takes (other keys still set Vim's marks, `<Esc>` cancels)
+- Fix: a key mapped only in the buffer that was current while hiraishin
+  loaded (a dashboard, say) kept the default mapping from being set
+  everywhere, e.g. `<BS>` for camp
+
 ## v0.10.0 — 2026-10-17
 
 - **Camp**: `m0` (`:Hiraishin camp`) makes a line the place you keep coming

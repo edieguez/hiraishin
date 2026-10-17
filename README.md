@@ -99,7 +99,8 @@ The rule: anything with a number has no leader; everything else lives under
 `<leader>h`. None of these keys need a modifier or a dead key, so they work
 the same on any layout, on macOS and Linux. `m1`…`m9` take nothing from Vim
 (it can't set digit marks), `mm` gives up mark `m`, and `g1`…`g9` only
-shadow `g8`. `g0` replaces "start of the screen line" (only useful with
+shadow `g8`. After `m`, hiraishin waits for the next key as long as you need
+(other keys still set Vim's marks). `g0` replaces "start of the screen line" (only useful with
 `wrap`) and `<BS>` replaces "cursor left"; turn either off with
 `keymaps = { go_camp = false }` / `{ go_camp_alt = false }`. Vim's other marks
 (`ma`, `'a`, …) keep working.
