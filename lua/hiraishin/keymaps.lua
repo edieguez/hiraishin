@@ -6,9 +6,17 @@ local function h()
   return require("hiraishin")
 end
 
+---Feedback for keymaps: guidance ("No kunai below") is a quiet echo,
+---real problems ("File not found") are warnings.
 local function report(_, err)
-  if err then
-    require("hiraishin.util").notify(err, vim.log.levels.WARN)
+  if not err then
+    return
+  end
+  local ui = require("hiraishin.ui")
+  if err:match("^File not found") or err:match("^Not a file") or err:match("^Buffer has no") then
+    ui.warn(err)
+  else
+    ui.info(err)
   end
 end
 
@@ -52,6 +60,20 @@ M.defaults = {
       report(h().prev({ count = vim.v.count1, scope = "list" }))
     end,
   },
+  next_seal = {
+    lhs = "<leader>hj",
+    desc = "Next seal (1 → 9)",
+    rhs = function()
+      report(h().next({ count = vim.v.count1, scope = "seal" }))
+    end,
+  },
+  prev_seal = {
+    lhs = "<leader>hk",
+    desc = "Previous seal (9 → 1)",
+    rhs = function()
+      report(h().prev({ count = vim.v.count1, scope = "seal" }))
+    end,
+  },
 }
 
 ---Nine-key groups. Override with a prefix ("<leader>j" → <leader>j1..9) or false.
@@ -61,7 +83,7 @@ M.groups = {
     desc = "Seal kunai as %d",
     rhs = function(n)
       return function()
-        report(h().seal(n))
+        require("hiraishin.commands").seal(n)
       end
     end,
   },
@@ -80,6 +102,15 @@ local DESC_PREFIX = "hiraishin: "
 
 ---@type string[] expanded lhs (leader resolved) of maps hiraishin set
 local applied = {}
+---@type table<string, string> action -> lhs as configured (for hints)
+local by_action = {}
+
+---Key bound to an action by hiraishin, nil when none (for messages).
+---@param action string
+---@return string?
+function M.lhs_of(action)
+  return by_action[action]
+end
 
 local function clear()
   for _, lhs in ipairs(applied) do
@@ -90,13 +121,17 @@ local function clear()
     end
   end
   applied = {}
+  by_action = {}
 end
 
-local function set(lhs, rhs, desc, forced)
+local function set(lhs, rhs, desc, forced, action)
   -- user overrides always win; defaults never clobber an existing mapping
   if forced or vim.fn.maparg(lhs, "n") == "" then
     vim.keymap.set("n", lhs, rhs, { desc = DESC_PREFIX .. desc, silent = true })
     table.insert(applied, vim.fn.maparg(lhs, "n", false, true).lhs or lhs)
+    if action then
+      by_action[action] = lhs
+    end
   end
 end
 
@@ -113,7 +148,7 @@ function M.setup()
       lhs = overrides[action]
     end
     if lhs then
-      set(lhs, def.rhs, def.desc, overrides[action] ~= nil)
+      set(lhs, def.rhs, def.desc, overrides[action] ~= nil, action)
     end
   end
   for group, def in pairs(M.groups) do
@@ -123,9 +158,22 @@ function M.setup()
     end
     if prefix then
       for n = 1, 9 do
-        set(prefix .. n, def.rhs(n), def.desc:format(n), overrides[group] ~= nil)
+        set(prefix .. n, def.rhs(n), def.desc:format(n), overrides[group] ~= nil, group .. "_" .. n)
       end
     end
+  end
+  -- label the <leader>h group in which-key (v3 API), when it is installed
+  local prefix = overrides.assign_slot
+  if prefix == nil then
+    prefix = M.groups.assign_slot.prefix
+  end
+  if prefix then
+    vim.schedule(function()
+      local ok, wk = pcall(require, "which-key")
+      if ok and type(wk) == "table" and wk.add then
+        pcall(wk.add, { { prefix, group = "hiraishin", icon = { icon = "⚡", color = "yellow" } } })
+      end
+    end)
   end
 end
 

@@ -47,6 +47,28 @@ local function file_lines(abs, line, cache)
   return lines and lines[line] or nil
 end
 
+---File icon and its highlight from mini.icons (when set up) or nvim-web-devicons.
+---@param path string
+---@return string? icon, string? hl
+function M.icon(path)
+  if not config.options.picker.icons then
+    return nil
+  end
+  if _G.MiniIcons then
+    local ok, icon, hl = pcall(_G.MiniIcons.get, "file", path)
+    if ok and icon then
+      return icon, hl
+    end
+  end
+  local ok, devicons = pcall(require, "nvim-web-devicons")
+  if ok then
+    local icon, hl = devicons.get_icon(vim.fs.basename(path), vim.fn.fnamemodify(path, ":e"), { default = true })
+    if icon then
+      return icon, hl
+    end
+  end
+end
+
 ---@param e hiraishin.Entry
 ---@param show_list boolean
 local function label(e, show_list)
@@ -137,7 +159,8 @@ function M.entries(opts)
       end
     end
   end
-  local sorter = SORTERS[config.options.picker.sort] or SORTERS.recent
+  local sort = scope.project_overrides(ctx.root).sort or config.options.picker.sort
+  local sorter = SORTERS[sort] or SORTERS.recent
   table.sort(out, function(a, b)
     if (a.slot ~= nil) ~= (b.slot ~= nil) then
       return a.slot ~= nil
@@ -153,6 +176,7 @@ function M.entries(opts)
   local show_list = opts.filter == "all"
   for _, e in ipairs(out) do
     e.label = label(e, show_list)
+    e.icon, e.icon_hl = M.icon(e.file)
     e.ordinal = table.concat({ e.bookmark.name or "", e.file, e.text, e.bookmark.note or "", e.list }, " ")
   end
   return out, ctx
@@ -175,7 +199,7 @@ M.actions = {}
 function M.actions.jump(ctx, e, split, win)
   local bm = lookup(ctx, e)
   if not bm then
-    return util.notify("kunai no longer exists", vim.log.levels.WARN)
+    return util.notify("Kunai no longer exists", vim.log.levels.WARN)
   end
   if win and vim.api.nvim_win_is_valid(win) and not split then
     vim.api.nvim_set_current_win(win)
@@ -209,9 +233,10 @@ function M.actions.rename(ctx, e, done)
     if input ~= nil then
       local name = util.trim(input)
       if name and list_ops.find_name(list, name, bm.id) then
-        util.notify(string.format("a kunai named '%s' already exists", name), vim.log.levels.WARN)
+        util.notify(string.format("A kunai named '%s' already exists", name), vim.log.levels.WARN)
       else
         bm.name = name
+        bm.seal_only = name == nil and bm.seal_only or nil
         bm.updated_at = os.time()
         store.changed(ctx)
         tracker.reconcile({ store = ctx.store })
@@ -302,31 +327,46 @@ function M.backend(wanted)
   return require("hiraishin.picker.select"), "select"
 end
 
+---"Kunai · <list> (n)", "Kunai · all lists (n)", "Kunai · this file (n)".
+---@param opts hiraishin.PickOpts
+---@param ctx hiraishin.Context
+---@param count integer
+---@return string
+function M.title(opts, ctx, count)
+  local what
+  if opts.filter == "all" then
+    what = "all lists"
+  elseif opts.filter == "buffer" then
+    what = "this file"
+  else
+    what = store.get(ctx).active_list
+  end
+  return string.format("Kunai · %s (%d)", what, count)
+end
+
 ---Open the picker.
 ---@param opts? hiraishin.PickOpts
 function M.open(opts)
   opts = opts or {}
   local entries, ctx = M.entries(opts)
   if #entries == 0 then
-    return util.notify(opts.filter == "buffer" and "no kunai in this buffer" or "no kunai yet")
+    local how = require("hiraishin.ui").hint("toggle", ":Hiraishin toggle")
+    return util.notify(
+      (opts.filter == "buffer" and "No kunai in this file" or "No kunai yet") .. " · " .. how .. " places one"
+    )
   end
   local backend = M.backend(opts.backend)
-  local title = "Kunai"
-  if opts.filter == "all" then
-    title = "Kunai (all lists)"
-  elseif opts.filter == "buffer" then
-    title = "Kunai (buffer)"
-  else
-    local active = store.get(ctx).active_list
-    if active ~= "default" then
-      title = "Kunai [" .. active .. "]"
-    end
-  end
   backend.open({
     entries = entries,
     ctx = ctx,
-    title = title,
+    title = M.title(opts, ctx, #entries),
     keys = config.options.picker.keys,
+    -- choose another list, then reopen on it (all-lists pickers just reopen)
+    switch_list = function()
+      require("hiraishin.commands").choose_list(function()
+        M.open(opts)
+      end)
+    end,
     -- fresh entries after a change (delete/rename) for backends that refresh
     refresh = function()
       return (M.entries(opts))

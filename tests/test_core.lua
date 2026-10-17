@@ -34,7 +34,7 @@ end
 T["toggle"]["refuses non-file buffers"] = function()
   child.cmd("enew")
   child.lua([[vim.bo.buftype = "nofile"]])
-  eq(child.lua_get([[select(3, require("hiraishin").toggle())]]), "not a file buffer")
+  eq(child.lua_get([[select(3, require("hiraishin").toggle())]]), "Not a file buffer")
 end
 
 T["add"] = MiniTest.new_set()
@@ -57,7 +57,7 @@ T["add"]["rejects a duplicate name"] = function()
   child.api.nvim_win_set_cursor(0, { 3, 0 })
   local res = child.lua_get([[{ require("hiraishin").add({ name = "dup" }) }]])
   eq(res[1], vim.NIL)
-  eq(res[2], "a kunai named 'dup' already exists")
+  eq(res[2], "A kunai named 'dup' already exists")
   eq(#child.lua_get([[require("hiraishin").list()]]), 1)
 end
 
@@ -81,7 +81,7 @@ end
 
 T["add"]["rejects a line out of range"] = function()
   main_lua(1)
-  eq(child.lua_get([[select(2, require("hiraishin").add({ bufnr = 0, line = 99 }))]]), "line out of range")
+  eq(child.lua_get([[select(2, require("hiraishin").add({ bufnr = 0, line = 99 }))]]), "Line out of range")
 end
 
 T["remove / update"] = MiniTest.new_set()
@@ -94,7 +94,7 @@ T["remove / update"]["removes by name and by id"] = function()
   child.lua([[require("hiraishin").remove("one")]])
   child.lua([[require("hiraishin").remove(...)]], { id })
   eq(#child.lua_get([[require("hiraishin").list()]]), 0)
-  eq(child.lua_get([[select(2, require("hiraishin").remove("one"))]]), "no kunai 'one'")
+  eq(child.lua_get([[select(2, require("hiraishin").remove("one"))]]), "No kunai 'one'")
 end
 
 T["remove / update"]["frees the slot of a removed bookmark"] = function()
@@ -116,7 +116,7 @@ T["remove / update"]["renames, clears and protects names"] = function()
   child.lua([[require("hiraishin").add({ name = "a" })]])
   child.api.nvim_win_set_cursor(0, { 3, 0 })
   child.lua([[require("hiraishin").add({ name = "b", note = "n" })]])
-  eq(child.lua_get([[select(2, require("hiraishin").update("a", { name = "b" }))]]), "a kunai named 'b' already exists")
+  eq(child.lua_get([[select(2, require("hiraishin").update("a", { name = "b" }))]]), "A kunai named 'b' already exists")
   child.lua([[require("hiraishin").update("a", { name = "c" })]])
   child.lua([[require("hiraishin").update("b", { note = false })]])
   eq(child.lua_get([[require("hiraishin").get("c").line]]), 1)
@@ -233,7 +233,21 @@ end
 
 T["keymaps"] = MiniTest.new_set()
 
-T["commands"]["toggle asks before removing a named kunai"] = function()
+T["commands"]["toggle removes a named kunai at once and says how to undo"] = function()
+  main_lua(3)
+  child.lua([[require("hiraishin").add({ name = "keep" })]])
+  child.lua([[vim.fn.confirm = function() error("should not ask") end]])
+  child.cmd("Hiraishin toggle")
+  eq(#child.lua_get([[require("hiraishin").list()]]), 0)
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Removed kunai 'keep' · <leader>hu to undo")
+  child.cmd("Hiraishin toggle")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Kunai placed · 1 in this file")
+end
+
+T["commands"]["confirm_remove_named = true asks before removing a named kunai"] = function()
+  child.lua(
+    [[require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 }, confirm_remove_named = true })]]
+  )
   main_lua(3)
   child.lua([[require("hiraishin").add({ name = "keep" })]])
   child.lua([[_G.answer = 2; vim.fn.confirm = function() return _G.answer end]])
@@ -252,10 +266,7 @@ T["commands"]["toggle removes unnamed kunai without asking"] = function()
   eq(#child.lua_get([[require("hiraishin").list()]]), 0)
 end
 
-T["commands"]["confirm_remove_named = false skips the prompt"] = function()
-  child.lua(
-    [[require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 }, confirm_remove_named = false })]]
-  )
+T["commands"]["confirm_remove_named = false (default) skips the prompt"] = function()
   main_lua(3)
   child.lua([[require("hiraishin").add({ name = "x" })]])
   child.lua([[vim.fn.confirm = function() error("should not ask") end]])

@@ -8,6 +8,26 @@ local M = {}
 M.ns = vim.api.nvim_create_namespace("hiraishin")
 -- sign-only extmarks for stale kunai at their last known line
 M.stale_ns = vim.api.nvim_create_namespace("hiraishin_stale")
+-- the name/note shown on the cursor line (virt_text.show = "cursorline")
+M.cursor_ns = vim.api.nvim_create_namespace("hiraishin_cursor")
+-- the brief highlight after a jump
+M.flash_ns = vim.api.nvim_create_namespace("hiraishin_flash")
+
+M.PRESETS = {
+  nerd = { icon = "", stale = "" }, -- bookmark, bookmark outline
+  ascii = { icon = "*", stale = "?" },
+  emoji = { icon = "⚡", stale = "!" },
+}
+
+---Sign glyphs in use: explicit icons win over the style preset.
+---@return string icon, string stale_icon
+function M.icons()
+  local o = config.options.signs
+  local preset = M.PRESETS[o.style] or M.PRESETS.nerd
+  local icon = type(o.icon) == "string" and o.icon or preset.icon
+  local stale = type(o.stale_icon) == "string" and o.stale_icon or preset.stale
+  return icon, stale
+end
 
 function M.setup_highlights()
   local links = {
@@ -17,16 +37,22 @@ function M.setup_highlights()
     HiraishinLine = "CursorLine",
     HiraishinVirtText = "Comment",
     HiraishinManagerSlot = "HiraishinSignSlot",
+    HiraishinManagerPath = "Comment",
+    HiraishinManagerSep = "NonText",
+    HiraishinManagerHeader = "Title",
     HiraishinStatus = "HiraishinSign",
+    HiraishinTitle = "Title",
+    HiraishinFlash = "IncSearch",
   }
   for group, target in pairs(links) do
     vim.api.nvim_set_hl(0, group, { link = target, default = true })
   end
 end
 
+---End-of-line chunks for a kunai (name, note icon), nil when there is nothing.
 ---@param bm hiraishin.Bookmark
 ---@return table? virt_text chunks
-local function virt_text(bm)
+function M.virt_text(bm)
   local v = config.options.virt_text
   if not v.enabled then
     return nil
@@ -53,10 +79,11 @@ function M.decoration(list, bm, stale)
   local o = config.options.signs
   local out = {}
   if o.enabled then
-    local text, hl = o.icon, "HiraishinSign"
+    local icon, stale_icon = M.icons()
+    local text, hl = icon, "HiraishinSign"
     local slot = o.show_slot and list_ops.slot_of(list, bm.id) or nil
     if stale then
-      text, hl = o.stale_icon, "HiraishinSignStale"
+      text, hl = stale_icon, "HiraishinSignStale"
     elseif slot then
       text, hl = slot, "HiraishinSignSlot"
     end
@@ -69,7 +96,7 @@ function M.decoration(list, bm, stale)
     if config.options.line_highlight then
       out.line_hl_group = "HiraishinLine"
     end
-    local vt = virt_text(bm)
+    local vt = config.options.virt_text.show == "always" and M.virt_text(bm) or nil
     if vt then
       out.virt_text = vt
       out.virt_text_pos = config.options.virt_text.position

@@ -60,8 +60,10 @@ Set only when the key is free. Override per action with `keymaps`
   <leader>ha      place or rename a named kunai                 `add`
   <leader>hn      edit the kunai's note                         `note`
   <leader>hd      remove the kunai on the line                  `delete`
-  <leader>h1..9   put seal 1-9 on the line's kunai              `assign_slot`
-  <leader>1..9    jump to the kunai with that seal              `jump_slot`
+  <leader>h1..9   seal the line with 1-9                        `assign_slot`
+  <leader>1..9    jump to that seal                             `jump_slot`
+  <leader>hj      next seal (1 -> 9)                            `next_seal`
+  <leader>hk      previous seal                                 `prev_seal`
   ]m  [m          next / previous kunai in the buffer           `next` `prev`
   ]M  [M          next / previous kunai in the list             `next_list`
                                                                 `prev_list`
@@ -85,8 +87,9 @@ The nine-key groups take a prefix or false: >lua
 All commands are subcommands of `:Hiraishin`, with completion.
 
 :Hiraishin toggle                                          *:Hiraishin-toggle*
-    Place a kunai on the cursor line, or remove the one there. Removing a
-    kunai with a name or note asks first (|hiraishin-confirm_remove_named|).
+    Place a kunai on the cursor line, or remove the one there. The message
+    says how to undo a removal (|hiraishin-confirm_remove_named| asks first
+    instead).
 
 :Hiraishin add [name]                                         *:Hiraishin-add*
 :Hiraishin! add
@@ -101,15 +104,21 @@ All commands are subcommands of `:Hiraishin`, with completion.
 
 :Hiraishin seal {1-9}                                        *:Hiraishin-seal*
 :Hiraishin seal clear
-    Put a seal on the line's kunai (placing one if needed). A seal held by
-    another kunai moves here.
+    Seal the cursor line. A seal held by another line moves here.
+                                                             *hiraishin-seals*
+    Seals are quick jumps. Sealing a line without a kunai creates one just
+    for the seal; when the seal is cleared or moved away, that kunai goes
+    too (|:Hiraishin-undo| brings it back). A kunai placed on purpose
+    (toggle, add) or given a name or note stays without its seal.
 
 :Hiraishin jump {name|1-9} [vsplit|split|tab]                *:Hiraishin-jump*
     Jump to a kunai. The jump is in the jumplist, so CTRL-O comes back.
 
-:Hiraishin next [list]                                       *:Hiraishin-next*
-:Hiraishin prev [list]                                       *:Hiraishin-prev*
-    Next / previous kunai in the buffer, or across files with "list".
+:Hiraishin next [list|seal]                                  *:Hiraishin-next*
+:Hiraishin prev [list|seal]                                  *:Hiraishin-prev*
+    Next / previous kunai in the buffer, across files in list order with
+    "list", or the next / previous seal in number order with "seal" (off a
+    seal, it continues from the last seal jumped to).
 
 :Hiraishin pick [buffer|all]                                 *:Hiraishin-pick*
     Open the picker (|hiraishin-picker|).
@@ -137,7 +146,7 @@ All commands are subcommands of `:Hiraishin`, with completion.
     ones.
 
 :Hiraishin prune                                            *:Hiraishin-prune*
-    Remove stale kunai after confirming.
+    Remove stale kunai (|:Hiraishin-undo| brings them back).
 
 :Hiraishin import marks                                    *:Hiraishin-import*
     Turn global marks A-Z into kunai named "mark A", ...
@@ -148,6 +157,8 @@ All commands are subcommands of `:Hiraishin`, with completion.
 Uses snacks.picker, telescope, fzf-lua or mini.pick, whichever is installed
 (in LazyVim it follows `vim.g.lazyvim_picker`), else |vim.ui.select()|.
 Sealed kunai come first, by seal number, then the rest by `picker.sort`.
+The title shows the list and the count; files get icons from mini.icons or
+nvim-web-devicons (`picker.icons`).
 
   <CR>                jump
   <C-v> <C-s> <C-t>   vertical split / split / tab
@@ -155,23 +166,31 @@ Sealed kunai come first, by seal number, then the rest by `picker.sort`.
   <C-e>               rename
   <C-o>               edit the note
   <C-q>               send the results to the quickfix list
+  <C-l>               switch to another list and reopen
 
 Keys are set under `picker.keys`. |vim.ui.select()| can only jump;
 mini.pick splits with its own <C-s> <C-v> <C-t>.
 
+Also available as `:Telescope hiraishin [buffer|all]` (after
+`require("telescope").load_extension("hiraishin")`) and as
+`Snacks.picker.hiraishin({ filter = ... })`.
+
 ==============================================================================
 6. MANAGER                                                 *hiraishin-manager*
 
-A floating buffer with one line per kunai of the list: >
+A floating buffer with one line per kunai of the list, under a column
+header: >
+    # │ name       │ location                    │ note
     1 │ auth-entry │ internal/auth/handler.go:42 │ Token refresh starts here
-    - │ -          │ cmd/server/main.go:17       │
+    - │ -          │ cmd/server/main.go:17 !     │
 <
+"!" marks a stale kunai; "●" in the title means unapplied edits.
 Edit it like text, then |:w| applies everything at once:
 
   - change the seal (1-9 or -), the name (- for none) or the note
   - reorder lines to reorder the list (used by ]M [M and `sort = "manual"`)
-  - delete lines to delete kunai (asks first; |:Hiraishin-undo| brings
-    them back)
+  - delete lines to delete kunai (|:Hiraishin-undo| brings them back;
+    `manager.confirm_delete` asks first)
 
 The path is read-only. Each line ends with a hidden kunai id; lines can be
 moved or deleted but not added. Problems (two kunai with one seal, a
@@ -201,7 +220,17 @@ Scopes decide where lists are stored:
             Neovim regains focus.
 
 Stores are JSON files under `storage.dir`, written atomically. A store
-another Neovim instance changed is reloaded on |FocusGained|.
+another Neovim instance changed is reloaded on |FocusGained|, and a save
+merges what the other instance changed (additions, removals, renames,
+seals) instead of overwriting it.
+
+                                                       *hiraishin-project-file*
+An empty `.hiraishin` file marks a project root. It may also return a table
+setting the scope and picker sort for that project: >lua
+    return { scope = "branch", picker = { sort = "path" } }
+<
+It is read with |vim.secure.read()| (Neovim asks before trusting it) and
+only those two keys are used. |:Hiraishin-scope| still wins for the session.
 
 ==============================================================================
 8. LINE TRACKING                                          *hiraishin-tracking*
@@ -242,39 +271,50 @@ Defaults: >lua
       signs = {
         enabled = true,
         priority = 15,
-        icon = "⚡",
-        stale_icon = "!",
+        style = "nerd",           -- "nerd" | "ascii" (* ?) | "emoji" (⚡ !)
+        icon = false,             -- a string overrides the style's icon
+        stale_icon = false,
         show_slot = true,
         numhl = false,
       },
       line_highlight = false,
       virt_text = {
         enabled = true,
+        show = "cursorline",      -- name on the cursor line, or "always"
         only_named = true,
         position = "eol",         -- "eol" | "right_align"
         prefix = "← ",
         note_icon = "✎",
       },
       name = { suggest_from_treesitter = true },
-      jump = { reuse_window = true, center = true, open_folds = true },
+      note_hover = true,          -- the note in a float on CursorHold
+      jump = {
+        reuse_window = true,
+        center = true,
+        open_folds = true,
+        flash = true,             -- highlight the line you land on
+        flash_ms = 350,
+      },
       picker = {
         backend = "auto",         -- snacks | telescope | fzf-lua | mini | select
         sort = "recent",          -- recent | manual | path | created
         show_notes = true,
+        icons = true,
         keys = {
           vsplit = "<C-v>", split = "<C-s>", tab = "<C-t>",
           delete = "<C-d>", rename = "<C-e>", note = "<C-o>",
-          quickfix = "<C-q>",
+          quickfix = "<C-q>", list = "<C-l>",
         },
       },
       manager = {
         width = 0.8,
         height = 0.6,
         border = "rounded",
-        confirm_delete = true,
+        confirm_delete = false,
       },
       undo_history = 20,
-      confirm_remove_named = true,  *hiraishin-confirm_remove_named*
+      messages = "echo",          -- "echo" | "notify" | "silent"
+      confirm_remove_named = false, *hiraishin-confirm_remove_named*
       keymaps = true,
     })
 <
@@ -293,14 +333,14 @@ Defaults: >lua
     h.seal(n)
     h.slot_of(id_or_name)
     h.jump(name_or_seal, { split? })
-    h.next({ count?, wrap?, scope? = "buffer"|"list" })
+    h.next({ count?, wrap?, scope? = "buffer"|"list"|"seal" })
     h.prev({ ... })
     h.note()
     h.pick({ filter? = "buffer"|"all", backend? })
     h.to_quickfix({ loclist?, all? })
     h.manager()
     h.undo()
-    h.lists()                         --> names, active
+    h.lists()                         --> names, active, counts
     h.set_list(name)
     h.delete_list(name)
     h.set_scope(scope)
@@ -337,10 +377,12 @@ Copies are returned; change kunai through the API.
 ==============================================================================
 12. STATUSLINE                                          *hiraishin-statusline*
 
-`require("hiraishin").status()` returns "⚡3 [bug-1234]": kunai in the
-buffer, and the list when it is not "default". For lualine: >lua
+`require("hiraishin").status()` returns the sign icon and the number of
+kunai in the buffer, plus the list when it is not "default" ("3 [bug-1234]").
+For lualine (clicking it opens the picker for the file): >lua
     sections = { lualine_x = { require("hiraishin.integrations.lualine") } }
 <
+which-key, when installed, labels the <leader>h group "hiraishin".
 ==============================================================================
 13. HIGHLIGHTS                                          *hiraishin-highlights*
 
@@ -351,7 +393,12 @@ All link to standard groups and can be overridden:
   HiraishinSignStale     stale sign    -> DiagnosticWarn
   HiraishinLine          line          -> CursorLine
   HiraishinVirtText      name / note   -> Comment
+  HiraishinFlash         jump flash    -> IncSearch
   HiraishinManagerSlot   manager seal  -> HiraishinSignSlot
+  HiraishinManagerPath   manager path  -> Comment
+  HiraishinManagerSep    manager │     -> NonText
+  HiraishinManagerHeader manager head  -> Title
+  HiraishinTitle         message title -> Title
   HiraishinStatus        statusline    -> HiraishinSign
 
  vim:tw=78:ts=8:ft=help:norl:

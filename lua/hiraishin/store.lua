@@ -173,17 +173,129 @@ function M.get(ctx)
         end
       end
     end
+    entry.base = vim.deepcopy(entry.data)
   end
   return entry.data
 end
 
----Persist one store now.
+---Pick one side of a three-way merge: a side that did not change wins over
+---one that did; when both changed, the newer `updated_at` wins (ties: ours).
+local function pick(base, ours, theirs)
+  if vim.deep_equal(ours, theirs) then
+    return ours
+  end
+  if base ~= nil and vim.deep_equal(ours, base) then
+    return theirs
+  end
+  if base ~= nil and vim.deep_equal(theirs, base) then
+    return ours
+  end
+  return ((theirs.updated_at or 0) > (ours.updated_at or 0)) and theirs or ours
+end
+
+---@param base hiraishin.List?
+---@param ours hiraishin.List
+---@param theirs hiraishin.List
+---@return hiraishin.List
+local function merge_list(base, ours, theirs)
+  base = base or M.new_list()
+  local out = M.new_list()
+  local ids = {}
+  for id in pairs(ours.bookmarks) do
+    ids[id] = true
+  end
+  for id in pairs(theirs.bookmarks) do
+    ids[id] = true
+  end
+  for id in pairs(ids) do
+    local b, o, t = base.bookmarks[id], ours.bookmarks[id], theirs.bookmarks[id]
+    if o and t then
+      out.bookmarks[id] = pick(b, o, t)
+    elseif not b then
+      out.bookmarks[id] = o or t -- added on one side
+    end
+    -- in base but deleted on one side: the deletion wins
+  end
+  local seen = {}
+  for _, order in ipairs({ ours.order, theirs.order }) do
+    for _, id in ipairs(order) do
+      if out.bookmarks[id] and not seen[id] then
+        seen[id] = true
+        table.insert(out.order, id)
+      end
+    end
+  end
+  local taken = {}
+  for n = 1, 9 do
+    local slot = tostring(n)
+    local b, o, t = base.slots[slot], ours.slots[slot], theirs.slots[slot]
+    local id = (o ~= b) and o or ((t ~= b) and t or b)
+    if id and out.bookmarks[id] and not taken[id] then
+      out.slots[slot] = id
+      taken[id] = true
+    end
+  end
+  return out
+end
+
+---Three-way merge of a store: `base` is what this Neovim last read or wrote,
+---`ours` its current data, `theirs` what another Neovim wrote meanwhile.
+---@param base hiraishin.Data
+---@param ours hiraishin.Data
+---@param theirs hiraishin.Data
+---@return hiraishin.Data
+function M.merge(base, ours, theirs)
+  local out = { version = M.VERSION, root = ours.root or theirs.root, lists = {} }
+  local names = {}
+  for name in pairs(ours.lists) do
+    names[name] = true
+  end
+  for name in pairs(theirs.lists) do
+    names[name] = true
+  end
+  for name in pairs(names) do
+    local b, o, t = base.lists[name], ours.lists[name], theirs.lists[name]
+    if o and t then
+      out.lists[name] = merge_list(b, o, t)
+    elseif not b then
+      out.lists[name] = vim.deepcopy(o or t)
+    end
+  end
+  out.lists.default = out.lists.default or M.new_list()
+  out.active_list = out.lists[ours.active_list] and ours.active_list or "default"
+  return out
+end
+
+---Called with the store path after a save merged changes from disk.
+---@type fun(path: string)?
+M.on_merge = nil
+
+---Persist one store now. When another Neovim wrote the file since we read
+---it, the two versions are merged first.
 ---@param path string
 ---@return boolean ok
 local function save(path)
   local entry = cache[path]
   if not entry or not entry.dirty then
     return true
+  end
+  local merged = false
+  local disk = mtime_of(path)
+  if disk and entry.mtime and disk ~= entry.mtime and entry.base then
+    local content = read_file(path)
+    local ok_dec, decoded = pcall(vim.json.decode, content or "", { luanil = { object = true, array = true } })
+    local theirs = ok_dec and normalize(decoded, entry.root) or nil
+    if theirs then
+      local result = M.merge(entry.base, entry.data, theirs)
+      -- update in place: callers hold on to entry.data
+      for k in pairs(entry.data) do
+        entry.data[k] = nil
+      end
+      for k, v in pairs(result) do
+        entry.data[k] = v
+      end
+      merged = true
+    end
   end
   local ok, json = pcall(vim.json.encode, entry.data)
   if not ok then
@@ -197,6 +309,10 @@ local function save(path)
   end
   entry.dirty = false
   entry.mtime = mtime_of(path)
+  entry.base = vim.json.decode(json, { luanil = { object = true, array = true } })
+  if merged and M.on_merge then
+    M.on_merge(path)
+  end
   return true
 end
 
@@ -240,6 +356,7 @@ function M.reload_changed()
     if now and now ~= entry.mtime and not entry.dirty then
       local data = load(path, entry.root)
       entry.data = data
+      entry.base = vim.deepcopy(data)
       entry.mtime = now
       reloaded[path] = true
     end

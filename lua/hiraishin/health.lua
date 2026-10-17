@@ -53,7 +53,7 @@ function M.check()
   else
     health.ok("configuration is valid")
   end
-  health.info("scope: " .. o.scope)
+  health.info("scope: " .. require("hiraishin.scope").effective_scope())
 
   -- picker
   local ok_picker, picker = pcall(require, "hiraishin.picker")

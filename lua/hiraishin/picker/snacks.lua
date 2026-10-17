@@ -30,6 +30,9 @@ local function format(e)
     { e.bookmark.name or "—", e.bookmark.name and "Title" or "Comment" },
     { "  " },
   }
+  if e.icon then
+    table.insert(ret, { e.icon .. " ", e.icon_hl or "Normal" })
+  end
   if e.list and e.label:find("(" .. e.list .. ")", 1, true) then
     table.insert(ret, { "(" .. e.list .. ")  ", "Special" })
   end
@@ -97,6 +100,9 @@ function M.open(p)
         core.actions.quickfix(entries)
       end)
     end,
+    hiraishin_list = function(picker)
+      close_then(picker, p.switch_list)
+    end,
   }
   for _, kind in ipairs({ "vsplit", "split", "tab" }) do
     actions["hiraishin_" .. kind] = function(picker, item)
@@ -117,6 +123,7 @@ function M.open(p)
     rename = "hiraishin_rename",
     note = "hiraishin_note",
     quickfix = "hiraishin_quickfix",
+    list = "hiraishin_list",
   }
   for name, action in pairs(bindings) do
     if keys[name] then

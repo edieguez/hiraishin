@@ -346,21 +346,19 @@ T["relocate and prune"]["relocate refuses an occupied line"] = function()
   child.lua([[require("hiraishin").add({ name = "a" })]])
   child.api.nvim_win_set_cursor(0, { 3, 0 })
   child.lua([[require("hiraishin").add({ name = "b" })]])
-  eq(child.lua_get([[select(2, require("hiraishin").relocate("a"))]]), "another kunai already marks this line")
+  eq(child.lua_get([[select(2, require("hiraishin").relocate("a"))]]), "Another kunai already marks this line")
 end
 
-T["relocate and prune"][":Hiraishin prune asks, then removes stale kunai"] = function()
+T["relocate and prune"][":Hiraishin prune removes stale kunai and can be undone"] = function()
   make_stale()
   child.api.nvim_win_set_cursor(0, { 1, 0 })
   child.lua([[require("hiraishin").add({ name = "keep" })]])
-  child.lua([[_G.answer = 2; vim.fn.confirm = function(msg) _G.asked = msg; return _G.answer end]])
-  child.cmd("Hiraishin prune")
-  eq(#child.lua_get([[require("hiraishin").list()]]), 2)
-  eq(child.lua_get("_G.asked"):match("Remove 1 stale kunai") ~= nil, true)
-  child.lua([[_G.answer = 1]])
   child.cmd("Hiraishin prune")
   local names = child.lua_get([[vim.tbl_map(function(b) return b.name end, require("hiraishin").list())]])
   eq(names, { "keep" })
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Removed 1 stale kunai · <leader>hu to undo")
+  child.cmd("Hiraishin undo")
+  eq(#child.lua_get([[require("hiraishin").list()]]), 2)
 end
 
 return T

@@ -11,7 +11,8 @@ end
 local function to_items(entries)
   local items = {}
   for i, e in ipairs(entries) do
-    items[i] = { text = e.label, path = e.abs, lnum = e.line, col = e.col + 1, entry = e }
+    local text = e.icon and (e.icon .. " " .. e.label) or e.label
+    items[i] = { text = text, path = e.abs, lnum = e.line, col = e.col + 1, entry = e }
   end
   return items
 end
@@ -76,6 +77,13 @@ function M.open(p)
         vim.schedule(function()
           core.actions.quickfix(entries)
         end)
+        return true
+      end,
+    },
+    hiraishin_list = {
+      key = p.keys.list,
+      func = function()
+        vim.schedule(p.switch_list)
         return true
       end,
     },

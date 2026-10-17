@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### UX and UI pass
+- Seals are quick jumps: sealing a bare line makes a kunai just for the seal,
+  and it goes away when the seal is cleared or moved (undoable); kunai placed,
+  named or noted on purpose stay
+- `<leader>hj` / `<leader>hk` and `:Hiraishin next|prev seal` cycle through
+  seals in order
+- Signs: `signs.style` = `nerd` (default) | `ascii` | `emoji`
+- Names show on the cursor line only (`virt_text.show = "always"` for all)
+- Note hover float (`note_hover`), jump flash (`jump.flash`)
+- Messages say what happened and the next key to press; removals offer undo
+  instead of confirming (`confirm_remove_named`, `manager.confirm_delete` and
+  prune default to no prompt); `messages = "echo" | "notify" | "silent"`
+- Manager: column header, column highlights, unsaved marker in the title
+- Picker: title with list and count, file icons, `<C-l>` switches list
+- Integrations: which-key group label, `:Telescope hiraishin`,
+  `Snacks.picker.hiraishin()`, clickable lualine component
+- Saves merge changes another Neovim made to the same store
+- `.hiraishin` can set `scope` and `picker.sort` per project (trusted via
+  `vim.secure.read`)
+- Fix: a named kunai's name could be drawn twice
+
 ### Phase 6 — lists, scopes and polish
 - Lists: `:Hiraishin list [name]`, `list delete`, `<leader>hl`; seals are per list;
   kunai of other lists keep tracking edits; `HiraishinListChanged` event

@@ -32,7 +32,8 @@ end
 
 T["config"]["empty nested tables keep the defaults"] = function()
   child.lua([[require("hiraishin").setup({ signs = {}, root = {} })]])
-  eq(child.lua_get([[require("hiraishin.config").options.signs.icon]]), "⚡")
+  eq(child.lua_get([[require("hiraishin.config").options.signs.style]]), "nerd")
+  eq(child.lua_get([[require("hiraishin.config").options.signs.priority]]), 15)
   eq(child.lua_get([[require("hiraishin.config").options.root.markers]]), { ".git", ".hiraishin" })
 end
 
@@ -198,6 +199,132 @@ T["store"]["global scope uses one file with absolute paths"] = function()
   end
   table.sort(files)
   eq(files, { child.T("proj_a") .. "/src/main.lua", child.T("proj_b") .. "/app.go" })
+end
+
+T["merge"] = MiniTest.new_set()
+
+-- Another Neovim rewrites the store file: drop `drop` (an id), add a kunai
+-- "theirs", and rename `rename` (an id) to "renamed".
+local function external_write(opts)
+  child.lua(
+    [[
+    local o = ...
+    local ctx = require("hiraishin.scope").for_buf(0)
+    local data = vim.json.decode(table.concat(vim.fn.readfile(ctx.store), "\n"))
+    local list = data.lists.default
+    if o.drop then
+      list.bookmarks[o.drop] = nil
+    end
+    if o.rename then
+      list.bookmarks[o.rename].name = "renamed"
+      list.bookmarks[o.rename].updated_at = os.time() + 100
+    end
+    list.bookmarks.cccccccc = { id = "cccccccc", file = "src/main.lua", line = 7, col = 0, name = "theirs",
+      anchor = { text = "return M" }, created_at = os.time(), updated_at = os.time() }
+    table.insert(list.order, "cccccccc")
+    vim.uv.sleep(20) -- a distinct mtime
+    vim.fn.writefile({ vim.json.encode(data) }, ctx.store)
+  ]],
+    { opts }
+  )
+end
+
+T["merge"]["changes from another Neovim are merged on save"] = function()
+  child.edit(child.T("proj_a") .. "/src/main.lua", 1)
+  local a = child.lua_get([[require("hiraishin").add({ name = "a" }).id]])
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  local b = child.lua_get([[require("hiraishin").add({ name = "b" }).id]])
+  external_write({ drop = a })
+  -- a local change triggers the save (and the merge)
+  child.lua([[require("hiraishin").update("b", { note = "local note" })]])
+  child.lua([[require("hiraishin.store").flush()]])
+  local data = child.lua_get([[(function()
+    local ctx = require("hiraishin.scope").for_buf(0)
+    return vim.json.decode(table.concat(vim.fn.readfile(ctx.store), "\n"))
+  end)()]])
+  local list = data.lists.default
+  eq(list.bookmarks[a], nil) -- deleted over there
+  eq(list.bookmarks[b].note, "local note") -- changed here
+  eq(list.bookmarks.cccccccc.name, "theirs") -- added over there
+  eq(list.order, { b, "cccccccc" })
+  -- the merged kunai is drawn in the open buffer
+  child.lua([[vim.wait(50)]])
+  eq(#child.lua_get([[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").ns, 0, -1, {})]]), 2)
+end
+
+T["merge"]["the newer edit wins when both sides changed a kunai"] = function()
+  child.edit(child.T("proj_a") .. "/src/main.lua", 1)
+  local a = child.lua_get([[require("hiraishin").add({ name = "a" }).id]])
+  external_write({ rename = a })
+  child.lua([[require("hiraishin").update("a", { note = "older" })]])
+  child.lua([[require("hiraishin.store").flush()]])
+  local bm = child.lua_get(
+    [[require("hiraishin.store").get(require("hiraishin.scope").for_buf(0)).lists.default.bookmarks[...] ]],
+    { a }
+  )
+  eq(bm.name, "renamed")
+end
+
+T["merge"]["seals: a side that changed one wins"] = function()
+  local merged = child.lua_get([[(function()
+    local store = require("hiraishin.store")
+    local function data(slots)
+      local list = store.new_list()
+      for _, id in ipairs({ "a", "b", "c" }) do
+        list.bookmarks[id] = { id = id, file = "f", line = 1 }
+        table.insert(list.order, id)
+      end
+      list.slots = slots
+      return { version = 1, active_list = "default", lists = { default = list } }
+    end
+    local base = data({ ["1"] = "a" })
+    local ours = data({ ["1"] = "a", ["2"] = "b" })
+    local theirs = data({ ["1"] = "c" })
+    return store.merge(base, ours, theirs).lists.default.slots
+  end)()]])
+  eq(merged, { ["1"] = "c", ["2"] = "b" })
+end
+
+T["project file"] = MiniTest.new_set()
+
+local function trust_and_write(lines)
+  child.lua(
+    [[
+    local path = T.proj_b .. "/.hiraishin"
+    vim.fn.writefile(..., path)
+    local buf = vim.fn.bufadd(path)
+    -- without autocmds: hiraishin would read (and cache) the untrusted file
+    vim.cmd("noautocmd call bufload(" .. buf .. ")")
+    vim.secure.trust({ action = "allow", bufnr = buf })
+    vim.cmd("noautocmd bwipeout! " .. buf)
+  ]],
+    { lines }
+  )
+end
+
+T["project file"]["an empty .hiraishin marks the root without asking"] = function()
+  child.edit(child.T("proj_b") .. "/app.go", 1)
+  eq(child.lua_get([[require("hiraishin.scope").project_overrides(T.proj_b)]]), {})
+  eq(child.lua_get([[require("hiraishin.scope").effective_scope(T.proj_b)]]), "project")
+end
+
+T["project file"]["can set the scope and the picker sort"] = function()
+  trust_and_write({ "return { scope = 'branch', picker = { sort = 'path' }, storage = { dir = '/nope' } }" })
+  eq(child.lua_get([[require("hiraishin.scope").project_overrides(T.proj_b)]]), { scope = "branch", sort = "path" })
+  eq(child.lua_get([[require("hiraishin.scope").effective_scope(T.proj_b)]]), "branch")
+  -- the session scope still wins
+  child.lua([[require("hiraishin").set_scope("global")]])
+  eq(child.lua_get([[require("hiraishin.scope").effective_scope(T.proj_b)]]), "global")
+end
+
+T["project file"]["an untrusted or broken file is ignored"] = function()
+  child.lua([[vim.fn.writefile({ "return { scope = 'global' }" }, T.proj_b .. "/.hiraishin")]])
+  child.lua([[_G.real_read = vim.secure.read; vim.secure.read = function() return nil end]]) -- the user said no
+  eq(child.lua_get([[require("hiraishin.scope").project_overrides(T.proj_b)]]), {})
+  child.lua([[vim.secure.read = _G.real_read]])
+  child.lua([[vim.uv.sleep(20)]])
+  trust_and_write({ "return {" })
+  eq(child.lua_get([[require("hiraishin.scope").effective_scope(T.proj_b)]]), "project")
 end
 
 return T

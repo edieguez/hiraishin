@@ -26,11 +26,11 @@ function M.buf_path(bufnr)
     return nil, "invalid buffer"
   end
   if vim.bo[bufnr].buftype ~= "" then
-    return nil, "not a file buffer"
+    return nil, "Not a file buffer"
   end
   local name = vim.api.nvim_buf_get_name(bufnr)
   if name == "" then
-    return nil, "buffer has no file name"
+    return nil, "Buffer has no file name"
   end
   return M.realpath(vim.fn.fnamemodify(name, ":p"))
 end
@@ -102,7 +102,7 @@ end
 ---@param msg string
 ---@param level? integer
 function M.notify(msg, level)
-  vim.notify("hiraishin: " .. msg, level or vim.log.levels.INFO)
+  require("hiraishin.ui").notify(msg, level)
 end
 
 return M

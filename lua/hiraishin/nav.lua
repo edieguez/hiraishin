@@ -86,7 +86,7 @@ function M.jump(ctx, bm, list_name, opts)
   opts = opts or {}
   local abs = util.abspath(ctx.root, bm.file)
   if not vim.uv.fs_stat(abs) and vim.fn.bufexists(abs) == 0 then
-    return nil, string.format("file not found: %s", bm.file)
+    return nil, string.format("File not found: %s", bm.file)
   end
   local from = { file = util.buf_path(0), line = vim.api.nvim_win_get_cursor(0)[1] }
   events.emit("HiraishinJump", { bookmark = vim.deepcopy(bm), list = list_name, from = from })
@@ -113,10 +113,13 @@ function M.jump(ctx, bm, list_name, opts)
   if j.center then
     vim.cmd("normal! zz")
   end
+  if j.flash then
+    M.flash(bufnr, line)
+  end
   if stale then
     util.notify(
       string.format(
-        "kunai '%s' is stale (its line was not found); :Hiraishin relocate to re-attach it",
+        "Kunai '%s' is stale (its line was not found) · :Hiraishin relocate re-attaches it",
         bm.name or bm.anchor.text
       ),
       vim.log.levels.WARN
@@ -125,6 +128,37 @@ function M.jump(ctx, bm, list_name, opts)
   bm.last_jump_at = os.time()
   store.changed(ctx)
   return vim.deepcopy(bm)
+end
+
+local flash_timer ---@type uv.uv_timer_t?
+
+---Briefly highlight a line (where a jump landed).
+---@param bufnr integer
+---@param line integer 1-based
+function M.flash(bufnr, line)
+  local ns = require("hiraishin.signs").flash_ns
+  vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+  vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+    end_row = line,
+    end_col = 0,
+    hl_group = "HiraishinFlash",
+    hl_eol = true,
+    priority = 250,
+  })
+  if flash_timer then
+    flash_timer:stop()
+  else
+    flash_timer = vim.uv.new_timer()
+  end
+  flash_timer:start(
+    config.options.jump.flash_ms,
+    0,
+    vim.schedule_wrap(function()
+      if vim.api.nvim_buf_is_valid(bufnr) then
+        vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+      end
+    end)
+  )
 end
 
 ---Live, non-stale kunai of a list with their positions.
@@ -147,13 +181,14 @@ end
 function M.step_buffer(dir, opts)
   local ctx = scope.for_buf(0)
   if not ctx then
-    return nil, "not a file buffer"
+    return nil, "Not a file buffer"
   end
   local data = store.get(ctx)
   local list, list_name = list_ops.active(data)
   local items = live_items(ctx, list, ctx.file)
   if #items == 0 then
-    return nil, "no kunai in this buffer"
+    return nil,
+      "No kunai in this file · " .. require("hiraishin.ui").hint("toggle", ":Hiraishin toggle") .. " places one"
   end
   table.sort(items, function(a, b)
     return a.line < b.line
@@ -187,7 +222,7 @@ function M.step_buffer(dir, opts)
     target, pos = found, found.line
   end
   if not target then
-    return nil, dir > 0 and "no kunai below" or "no kunai above"
+    return nil, dir > 0 and "No kunai below" or "No kunai above"
   end
   return M.jump(ctx, target.bm, list_name)
 end
@@ -202,7 +237,8 @@ function M.step_list(dir, opts)
   local list, list_name = list_ops.active(data)
   local items = live_items(ctx, list)
   if #items == 0 then
-    return nil, "no kunai in this list"
+    return nil,
+      "No kunai in this list · " .. require("hiraishin.ui").hint("toggle", ":Hiraishin toggle") .. " places one"
   end
   local file = ctx.file
   local cur = file and vim.api.nvim_win_get_cursor(0)[1] or nil
@@ -240,9 +276,68 @@ function M.step_list(dir, opts)
   if opts.wrap ~= false then
     target = ((target - 1) % n) + 1
   elseif target < 1 or target > n then
-    return nil, dir > 0 and "last kunai in the list" or "first kunai in the list"
+    return nil, dir > 0 and "Last kunai in the list" or "First kunai in the list"
   end
   return M.jump(ctx, items[target].bm, list_name)
+end
+
+-- seal of the last seal jump, to keep cycling from there when the cursor
+-- is not on a sealed kunai
+local last_seal ---@type integer?
+
+---Cycle through the sealed kunai of the active list in seal order (1 → 9).
+---@param dir 1|-1
+---@param opts { count?: integer, wrap?: boolean }
+---@return hiraishin.Bookmark?, string? err
+function M.step_seal(dir, opts)
+  local ctx = scope.resolve(0)
+  local list, list_name = list_ops.active(store.get(ctx))
+  local seals = {}
+  for slot in pairs(list.slots) do
+    table.insert(seals, tonumber(slot))
+  end
+  table.sort(seals)
+  if #seals == 0 then
+    local hint = require("hiraishin.ui").hint("assign_slot_1", ":Hiraishin seal 1")
+    return nil, "No seals in this list · " .. hint .. " seals this line"
+  end
+  -- where are we: the seal under the cursor, else the last seal jumped to
+  local here = tracker.at_cursor(0)
+  local current = here and tonumber(list_ops.slot_of(list, here.id) or "") or last_seal
+  local index
+  for i, s in ipairs(seals) do
+    if s == current then
+      index = i
+    end
+  end
+  if not index then
+    -- not on a seal: step from the gap where `current` would be
+    index = dir > 0 and 0 or #seals + 1
+    if current then
+      for i, s in ipairs(seals) do
+        if dir > 0 and s < current then
+          index = i
+        elseif dir < 0 and s > current and index == #seals + 1 then
+          index = i
+        end
+      end
+    end
+  end
+  local n = #seals
+  local target = index + dir * (opts.count or 1)
+  if opts.wrap ~= false then
+    target = ((target - 1) % n) + 1
+  elseif target < 1 or target > n then
+    return nil, dir > 0 and "Last seal" or "First seal"
+  end
+  local slot = seals[target]
+  last_seal = slot
+  local bm = list.bookmarks[list.slots[tostring(slot)]]
+  local res, err = M.jump(ctx, bm, list_name)
+  if res then
+    require("hiraishin.ui").info(string.format("Seal %d of %d%s", target, n, bm.name and (" · " .. bm.name) or ""))
+  end
+  return res, err
 end
 
 return M

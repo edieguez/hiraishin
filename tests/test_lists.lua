@@ -47,7 +47,10 @@ T["lists"]["set_list creates and switches; kunai and seals are per list"] = func
   place(5, "fix")
   child.lua([[require("hiraishin").seal(1)]])
   eq(child.signs(), { ["5"] = "1" })
-  eq(child.lua_get([[{ require("hiraishin").lists() }]]), { { "bug-1234", "default" }, "bug-1234" })
+  eq(
+    child.lua_get([[{ require("hiraishin").lists() }]]),
+    { { "bug-1234", "default" }, "bug-1234", { ["bug-1234"] = 1, default = 1 } }
+  )
   child.lua([[require("hiraishin").set_list("default")]])
   eq(names(), { "hello" })
   eq(child.signs(), { ["3"] = "1" })
@@ -80,8 +83,8 @@ T["lists"]["delete_list falls back to default and undo brings its kunai back"] =
   child.lua([[require("hiraishin").set_list("temp")]])
   place(3, "hello")
   child.cmd("Hiraishin list delete temp")
-  eq(child.lua_get([[{ require("hiraishin").lists() }]]), { { "default" }, "default" })
-  eq(child.lua_get([[select(2, require("hiraishin").delete_list("default"))]]), "the default list cannot be deleted")
+  eq(child.lua_get([[{ require("hiraishin").lists() }]]), { { "default" }, "default", { default = 0 } })
+  eq(child.lua_get([[select(2, require("hiraishin").delete_list("default"))]]), "The default list cannot be deleted")
   child.cmd("Hiraishin undo")
   child.lua([[require("hiraishin").set_list("temp")]])
   eq(names(), { "hello" })
@@ -97,7 +100,7 @@ T["lists"][":Hiraishin list shows a chooser with a new-list entry"] = function()
     vim.ui.input = function(_, cb) cb("fresh") end
   ]])
   child.cmd("Hiraishin list")
-  eq(child.lua_get("_G.items"), { "default  (active)", "+ new list…" })
+  eq(child.lua_get("_G.items"), { "default (0)  ● active", "+ New list…" })
   eq(child.lua_get([[select(2, require("hiraishin").lists())]]), "fresh")
 end
 
@@ -144,7 +147,9 @@ end
 
 T["scope"]["switching branches swaps the kunai on focus"] = function()
   git_init()
-  child.lua([[require("hiraishin").setup({ scope = "branch", storage = { dir = T.storage, debounce_ms = 0 } })]])
+  child.lua(
+    [[require("hiraishin").setup({ scope = "branch", storage = { dir = T.storage, debounce_ms = 0 }, signs = { style = "emoji" } })]]
+  )
   main_lua()
   place(3, "on-main")
   git({ "checkout", "-q", "-b", "feature" })

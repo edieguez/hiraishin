@@ -10,10 +10,40 @@ local function save_direct(target, text)
     return
   end
   bm.note = text
+  bm.seal_only = text == nil and bm.seal_only or nil
   bm.updated_at = os.time()
   store.changed(target.ctx)
   require("hiraishin.tracker").reconcile({ store = target.ctx.store })
   require("hiraishin.events").emit("HiraishinUpdate", { bookmark = vim.deepcopy(bm), list = target.list })
+end
+
+---Show the note of the kunai under the cursor in a small float that closes
+---when the cursor moves (CursorHold, note_hover = true).
+---@param bufnr? integer
+---@return integer? float window
+function M.hover(bufnr)
+  local bm = require("hiraishin.tracker").at_cursor(bufnr)
+  if not bm or not bm.note then
+    return nil
+  end
+  -- don't stack on top of another float (LSP hover, completion, ...)
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local cfg = vim.api.nvim_win_get_config(win)
+    if cfg.relative ~= "" and cfg.focusable ~= false and win ~= vim.api.nvim_get_current_win() then
+      return nil
+    end
+  end
+  local title = " " .. require("hiraishin.config").options.virt_text.note_icon .. " " .. (bm.name or "note") .. " "
+  local _, win = vim.lsp.util.open_floating_preview(vim.split(bm.note, "\n"), "markdown", {
+    border = "rounded",
+    title = title,
+    focus = false,
+    focusable = false,
+    focus_id = "hiraishin_note",
+    max_width = 70,
+    close_events = { "CursorMoved", "CursorMovedI", "InsertEnter", "BufLeave", "WinLeave" },
+  })
+  return win
 end
 
 ---Open the note editor. Without `target`: the kunai on the cursor line

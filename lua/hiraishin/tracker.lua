@@ -117,6 +117,7 @@ function M.render(bufnr)
       end
     end
   end
+  M.cursor_virt(bufnr)
   -- stale kunai: sign only, at the last known line
   vim.api.nvim_buf_clear_namespace(bufnr, signs.stale_ns, 0, -1)
   local active = data.lists[data.active_list]
@@ -204,6 +205,7 @@ function M.detach(bufnr)
   if vim.api.nvim_buf_is_valid(bufnr) then
     vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
     vim.api.nvim_buf_clear_namespace(bufnr, signs.stale_ns, 0, -1)
+    vim.api.nvim_buf_clear_namespace(bufnr, signs.cursor_ns, 0, -1)
   end
   tracked[bufnr] = nil
 end
@@ -369,6 +371,72 @@ function M.live_line(ctx, bm)
     return nil, false
   end
   return bm.line, false
+end
+
+---Show the name/note of the kunai under the cursor (virt_text.show = "cursorline").
+---@param bufnr? integer
+function M.cursor_virt(bufnr)
+  bufnr = real(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  vim.api.nvim_buf_clear_namespace(bufnr, signs.cursor_ns, 0, -1)
+  local t = tracked[bufnr]
+  if not t or config.options.virt_text.show ~= "cursorline" then
+    return
+  end
+  local win = vim.fn.bufwinid(bufnr)
+  if win == -1 then
+    return
+  end
+  local row = vim.api.nvim_win_get_cursor(win)[1] - 1
+  local here = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(bufnr, ns, { row, 0 }, { row, -1 }, { details = true })) do
+    if not (m[4] and m[4].invalid) then
+      here[m[1]] = true
+    end
+  end
+  if next(here) == nil then
+    return
+  end
+  local data = store.get(t.ctx)
+  local active = data.lists[data.active_list]
+  for id, mark_id in pairs(t.marks) do
+    if here[mark_id] and active and active.bookmarks[id] then
+      local vt = signs.virt_text(active.bookmarks[id])
+      if vt then
+        vim.api.nvim_buf_set_extmark(bufnr, signs.cursor_ns, row, 0, {
+          virt_text = vt,
+          virt_text_pos = config.options.virt_text.position,
+        })
+      end
+      return
+    end
+  end
+end
+
+---Kunai (active list) on the cursor line of a tracked buffer, from the live marks.
+---@param bufnr? integer
+---@return hiraishin.Bookmark?
+function M.at_cursor(bufnr)
+  bufnr = real(bufnr)
+  local t = tracked[bufnr]
+  local win = vim.fn.bufwinid(bufnr)
+  if not t or win == -1 then
+    return nil
+  end
+  local row = vim.api.nvim_win_get_cursor(win)[1] - 1
+  local data = store.get(t.ctx)
+  local active = data.lists[data.active_list]
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(bufnr, ns, { row, 0 }, { row, -1 }, { details = true })) do
+    if not (m[4] and m[4].invalid) then
+      for id, mark_id in pairs(t.marks) do
+        if mark_id == m[1] and active and active.bookmarks[id] then
+          return active.bookmarks[id]
+        end
+      end
+    end
+  end
 end
 
 ---Tracked buffers and the store context each one follows.

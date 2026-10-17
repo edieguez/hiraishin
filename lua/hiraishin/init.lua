@@ -21,6 +21,7 @@ function M.setup(opts)
   config.setup(opts)
   store.reset()
   tracker.reset()
+  scope.set_session_scope(nil)
   scope.invalidate()
   signs.setup_highlights()
 
@@ -89,6 +90,22 @@ function M.setup(opts)
       M.refresh()
     end,
   })
+  vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "BufEnter" }, {
+    group = group,
+    callback = function(ev)
+      if tracker.is_tracked(ev.buf) then
+        tracker.cursor_virt(ev.buf)
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd("CursorHold", {
+    group = group,
+    callback = function(ev)
+      if config.options.note_hover and tracker.is_tracked(ev.buf) then
+        require("hiraishin.note").hover(ev.buf)
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd("ColorScheme", {
     group = group,
     callback = signs.setup_highlights,
@@ -98,6 +115,21 @@ function M.setup(opts)
     callback = store.flush,
   })
   require("hiraishin.integrations.rename").setup(group)
+  -- another Neovim changed the same store: redraw with the merged result
+  store.on_merge = function(path)
+    vim.schedule(function()
+      tracker.reconcile({ store = path })
+    end)
+  end
+  -- Snacks.picker.hiraishin(), when snacks is loaded
+  vim.schedule(function()
+    local snacks = package.loaded["snacks"]
+    if type(snacks) == "table" and type(rawget(snacks, "picker") or snacks.picker) == "table" then
+      rawset(snacks.picker, "hiraishin", function(o)
+        M.pick(vim.tbl_extend("force", o or {}, { backend = "snacks" }))
+      end)
+    end
+  end)
 
   require("hiraishin.keymaps").setup()
   did_setup = true
@@ -173,7 +205,7 @@ end
 
 ---Add a bookmark on a line. On a line that already has one, its name/note are
 ---updated instead and the existing bookmark is returned.
----@param opts? { name?: string, note?: string, bufnr?: integer, line?: integer, col?: integer }
+---@param opts? { name?: string, note?: string, bufnr?: integer, line?: integer, col?: integer, seal_only?: boolean }
 ---@return hiraishin.Bookmark? bookmark, string? err_or_status
 function M.add(opts)
   ensure_setup()
@@ -184,20 +216,21 @@ function M.add(opts)
     return nil, err
   end
   if line < 1 or line > vim.api.nvim_buf_line_count(bufnr) then
-    return nil, "line out of range"
+    return nil, "Line out of range"
   end
   local data = store.get(ctx)
   local list, list_name = list_ops.active(data)
   local name, note = util.trim(opts.name), util.trim(opts.note)
   local existing = list_ops.find_at(list, ctx.file, line, line_fn(ctx))
   if name and list_ops.find_name(list, name, existing and existing.id) then
-    return nil, string.format("a kunai named '%s' already exists", name)
+    return nil, string.format("A kunai named '%s' already exists", name)
   end
 
   if existing then
-    if name or note then
+    if name or note or existing.seal_only then
       existing.name = name or existing.name
       existing.note = note or existing.note
+      existing.seal_only = nil -- placed on purpose now: it outlives its seal
       existing.updated_at = os.time()
       changed(ctx)
       events.emit("HiraishinUpdate", { bookmark = snapshot(ctx, existing), list = list_name })
@@ -215,6 +248,8 @@ function M.add(opts)
     note = note,
     anchor = util.anchor(bufnr, line),
     stale = false,
+    -- created by sealing a bare line: it goes away when it loses its seal
+    seal_only = opts.seal_only or nil,
     created_at = now,
     updated_at = now,
   }
@@ -235,7 +270,7 @@ function M.remove(key, opts)
   local list, list_name = list_ops.active(store.get(ctx))
   local bm = list_ops.find(list, key)
   if not bm then
-    return nil, string.format("no kunai '%s'", key)
+    return nil, string.format("No kunai '%s'", key)
   end
   local copy = snapshot(ctx, bm)
   history.record(ctx, { history.item(ctx, list_name, list, bm) }, opts.reason or "api")
@@ -280,7 +315,7 @@ end
 ---@param key string id or name
 ---@param fields { name?: string|false, note?: string|false, slot?: integer|false }
 ---@param opts? { bufnr?: integer }
----@return hiraishin.Bookmark? bookmark, string? err
+---@return hiraishin.Bookmark? bookmark, string? err, hiraishin.Bookmark? displaced kunai that lost the seal
 function M.update(key, fields, opts)
   ensure_setup()
   opts = opts or {}
@@ -288,38 +323,92 @@ function M.update(key, fields, opts)
   local list, list_name = list_ops.active(store.get(ctx))
   local bm = list_ops.find(list, key)
   if not bm then
-    return nil, string.format("no kunai '%s'", key)
+    return nil, string.format("No kunai '%s'", key)
   end
   local new_slot
   if fields.slot then
     new_slot = slot_key(fields.slot)
     if not new_slot then
-      return nil, "seals go from 1 to 9"
+      return nil, "Seals go from 1 to 9"
     end
   end
   if fields.name ~= nil then
     local name = fields.name and util.trim(fields.name) or nil
     if name and list_ops.find_name(list, name, bm.id) then
-      return nil, string.format("a kunai named '%s' already exists", name)
+      return nil, string.format("A kunai named '%s' already exists", name)
     end
     bm.name = name
   end
   if fields.note ~= nil then
     bm.note = fields.note and util.trim(fields.note) or nil
   end
+  if bm.name or bm.note then
+    bm.seal_only = nil -- a named/noted kunai is kept for its own sake
+  end
+  local displaced
+  local unsealed = {} -- kunai that lost their seal
   if fields.slot ~= nil then
     local current = list_ops.slot_of(list, bm.id)
     if current then
       list.slots[current] = nil
     end
     if new_slot then
+      local holder = list.slots[new_slot]
+      if holder and holder ~= bm.id and list.bookmarks[holder] then
+        displaced = snapshot(ctx, list.bookmarks[holder])
+        table.insert(unsealed, { bm = list.bookmarks[holder], slot = new_slot })
+      end
       list.slots[new_slot] = bm.id
+    elseif current then
+      table.insert(unsealed, { bm = bm, slot = current })
     end
   end
   bm.updated_at = os.time()
+  -- seals are quick jumps: a kunai that only existed for its seal goes with it
+  local dropped = M._drop_unsealed(ctx, list, list_name, unsealed, "seal")
+  if displaced and dropped[displaced.id] then
+    displaced.removed = true
+  end
   changed(ctx)
+  if dropped[bm.id] then
+    local copy = snapshot(ctx, bm)
+    copy.removed = true
+    return copy, nil, displaced
+  end
   events.emit("HiraishinUpdate", { bookmark = snapshot(ctx, bm), list = list_name })
-  return snapshot(ctx, bm)
+  return snapshot(ctx, bm), nil, displaced
+end
+
+---Delete the seal-only kunai among `items` ({ bm, slot = the seal it had })
+---that no longer hold a seal; undo brings them back with that seal when it is
+---free. Does not save; the caller does.
+---@return table<string, boolean> dropped ids
+function M._drop_unsealed(ctx, list, list_name, items, reason)
+  local dropped, records = {}, {}
+  for _, it in ipairs(items) do
+    local bm = it.bm
+    if bm.seal_only and not bm.name and not bm.note and not list_ops.slot_of(list, bm.id) then
+      table.insert(records, { bm = bm, slot = it.slot, copy = snapshot(ctx, bm) })
+    end
+  end
+  if #records == 0 then
+    return dropped
+  end
+  history.record(
+    ctx,
+    vim.tbl_map(function(r)
+      local item = history.item(ctx, list_name, list, r.bm)
+      item.slot = item.slot or r.slot
+      return item
+    end, records),
+    reason
+  )
+  for _, r in ipairs(records) do
+    list_ops.delete(list, r.bm.id)
+    dropped[r.bm.id] = true
+    events.emit("HiraishinRemove", { bookmark = r.copy, list = list_name, reason = reason })
+  end
+  return dropped
 end
 
 ---Seal (slot) number of a bookmark in the active list.
@@ -341,12 +430,12 @@ end
 function M.seal(n)
   ensure_setup()
   if not slot_key(n) then
-    return nil, "seals go from 1 to 9"
+    return nil, "Seals go from 1 to 9"
   end
   local bm = M.at_cursor()
   if not bm then
     local err
-    bm, err = M.add()
+    bm, err = M.add({ seal_only = true })
     if not bm then
       return nil, err
     end
@@ -365,12 +454,19 @@ local function resolve_target(key, opts)
     local id = list.slots[slot]
     bm = id and list.bookmarks[id] or nil
     if not bm then
-      return nil, nil, nil, string.format("seal %s is empty", slot)
+      return nil,
+        nil,
+        nil,
+        string.format(
+          "Seal %s is empty · %s seals this line",
+          slot,
+          require("hiraishin.ui").hint("assign_slot_" .. slot, ":Hiraishin seal " .. slot)
+        )
     end
   else
     bm = list_ops.find(list, tostring(key))
     if not bm then
-      return nil, nil, nil, string.format("no kunai '%s'", key)
+      return nil, nil, nil, string.format("No kunai '%s'", key)
     end
   end
   return ctx, bm, list_name
@@ -392,7 +488,7 @@ end
 
 ---Jump to the next kunai: in this buffer by line (default), or across files
 ---in list order with `scope = "list"`.
----@param opts? { count?: integer, wrap?: boolean, scope?: "buffer"|"list" }
+---@param opts? { count?: integer, wrap?: boolean, scope?: "buffer"|"list"|"seal" }
 ---@return hiraishin.Bookmark? bookmark, string? err
 function M.next(opts)
   ensure_setup()
@@ -400,12 +496,14 @@ function M.next(opts)
   local nav = require("hiraishin.nav")
   if opts.scope == "list" then
     return nav.step_list(1, opts)
+  elseif opts.scope == "seal" then
+    return nav.step_seal(1, opts)
   end
   return nav.step_buffer(1, opts)
 end
 
 ---Jump to the previous kunai. See next().
----@param opts? { count?: integer, wrap?: boolean, scope?: "buffer"|"list" }
+---@param opts? { count?: integer, wrap?: boolean, scope?: "buffer"|"list"|"seal" }
 ---@return hiraishin.Bookmark? bookmark, string? err
 function M.prev(opts)
   ensure_setup()
@@ -413,6 +511,8 @@ function M.prev(opts)
   local nav = require("hiraishin.nav")
   if opts.scope == "list" then
     return nav.step_list(-1, opts)
+  elseif opts.scope == "seal" then
+    return nav.step_seal(-1, opts)
   end
   return nav.step_buffer(-1, opts)
 end
@@ -555,11 +655,11 @@ function M.relocate(key, opts)
   local list, list_name = list_ops.active(data)
   local bm = list_ops.find(list, key)
   if not bm then
-    return nil, string.format("no kunai '%s'", key)
+    return nil, string.format("No kunai '%s'", key)
   end
   local occupant = list_ops.find_at(list, ctx.file, line, line_fn(ctx))
   if occupant and occupant.id ~= bm.id then
-    return nil, "another kunai already marks this line"
+    return nil, "Another kunai already marks this line"
   end
   local from = { file = bm.file, line = bm.line }
   bm.file = ctx.file
@@ -585,7 +685,7 @@ function M.undo()
   ensure_setup()
   local entry = history.pop()
   if not entry then
-    return nil, "nothing to undo"
+    return nil, "Nothing to undo"
   end
   local ctx = entry.ctx
   local data = store.get(ctx)
@@ -632,7 +732,11 @@ function M.refresh()
     return
   end
   local reattach = {}
-  if config.options.scope == "branch" then
+  local any_branch = false
+  for _, ctx in pairs(tracker.tracked()) do
+    any_branch = any_branch or ctx.scope == "branch"
+  end
+  if any_branch or scope.effective_scope() == "branch" then
     scope.invalidate()
     for bufnr, ctx in pairs(tracker.tracked()) do
       local now = scope.for_buf(bufnr)
@@ -660,14 +764,18 @@ end
 
 ---List names of the current scope (sorted) and the active one.
 ---@param opts? { bufnr?: integer }
----@return string[] names, string active
+---@return string[] names, string active, table<string, integer> counts
 function M.lists(opts)
   ensure_setup()
   opts = opts or {}
   local data = store.get(scope.resolve(opts.bufnr))
-  local names = vim.tbl_keys(data.lists)
+  local names, counts = {}, {}
+  for name, list in pairs(data.lists) do
+    table.insert(names, name)
+    counts[name] = #list.order
+  end
   table.sort(names)
-  return names, data.active_list
+  return names, data.active_list, counts
 end
 
 ---Make `name` the active list, creating it when needed.
@@ -679,7 +787,7 @@ function M.set_list(name, opts)
   opts = opts or {}
   name = util.trim(name)
   if not name then
-    return nil, "a list needs a name"
+    return nil, "A list needs a name"
   end
   local ctx = scope.resolve(opts.bufnr)
   local data = store.get(ctx)
@@ -700,13 +808,13 @@ function M.delete_list(name, opts)
   ensure_setup()
   opts = opts or {}
   if name == "default" then
-    return nil, "the default list cannot be deleted"
+    return nil, "The default list cannot be deleted"
   end
   local ctx = scope.resolve(opts.bufnr)
   local data = store.get(ctx)
   local list = data.lists[name]
   if not list then
-    return nil, string.format("no list '%s'", name)
+    return nil, string.format("No list '%s'", name)
   end
   local items = {}
   for _, bm in ipairs(list_ops.items(list)) do
@@ -729,10 +837,10 @@ end
 function M.set_scope(new_scope)
   ensure_setup()
   if new_scope ~= "project" and new_scope ~= "global" and new_scope ~= "branch" then
-    return nil, "scope must be project, global or branch"
+    return nil, "Scope must be project, global or branch"
   end
   store.flush()
-  config.options.scope = new_scope
+  scope.set_session_scope(new_scope)
   scope.invalidate()
   tracker.reset()
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
@@ -767,7 +875,7 @@ function M.status(bufnr)
   end
   local parts = {}
   if count > 0 then
-    table.insert(parts, config.options.signs.icon .. count)
+    table.insert(parts, (signs.icons()) .. count)
   end
   if name ~= "default" then
     table.insert(parts, "[" .. name .. "]")

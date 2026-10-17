@@ -32,7 +32,7 @@ function Helpers.new_child()
         write(T.proj_b .. "/app.go", { "package main", "", "func main() {", "}" })
         write(T.loose .. "/notes.txt", { "one", "two", "three" })
       end
-      opts = vim.tbl_deep_extend("force", { storage = { dir = T.storage, debounce_ms = 0 } }, opts or {})
+      opts = vim.tbl_deep_extend("force", { storage = { dir = T.storage, debounce_ms = 0 }, signs = { style = "emoji" } }, opts or {})
       require("hiraishin").setup(opts)
     ]],
       { tmp, opts or vim.empty_dict() }

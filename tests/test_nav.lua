@@ -71,8 +71,8 @@ end
 
 T["seals"]["rejects seals outside 1..9"] = function()
   main_lua(1)
-  eq(child.lua_get([[select(2, require("hiraishin").seal(0))]]), "seals go from 1 to 9")
-  eq(child.lua_get([[select(2, require("hiraishin").seal(10))]]), "seals go from 1 to 9")
+  eq(child.lua_get([[select(2, require("hiraishin").seal(0))]]), "Seals go from 1 to 9")
+  eq(child.lua_get([[select(2, require("hiraishin").seal(10))]]), "Seals go from 1 to 9")
   eq(#child.lua_get([[require("hiraishin").list()]]), 0)
 end
 
@@ -81,7 +81,85 @@ T["seals"][":Hiraishin seal / seal clear"] = function()
   child.cmd("Hiraishin seal 7")
   eq(child.signs(), { ["5"] = "7" })
   child.cmd("Hiraishin seal clear")
-  eq(child.signs(), { ["5"] = "⚡" })
+  -- the kunai only existed for the seal: it goes too
+  eq(child.signs(), {})
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Seal removed, and the kunai it made · <leader>hu to undo")
+  child.cmd("Hiraishin undo")
+  eq(child.signs(), { ["5"] = "7" })
+end
+
+T["seals"]["are quick jumps: a seal-only kunai goes away with its seal"] = function()
+  main_lua()
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.cmd("Hiraishin seal 1")
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  child.cmd("Hiraishin seal 1") -- replaces: line 1 is left without a kunai
+  eq(child.signs(), { ["3"] = "1" })
+  eq(#child.lua_get([[require("hiraishin").list()]]), 1)
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Sealed as 1 · <leader>1 jumps here")
+  -- moving a kunai to another seal keeps it
+  child.cmd("Hiraishin seal 2")
+  eq(child.signs(), { ["3"] = "2" })
+end
+
+T["seals"]["kunai placed, named or noted on purpose keep living without a seal"] = function()
+  main_lua()
+  local a = place(1) -- placed with toggle/add before sealing
+  child.lua("require('hiraishin').update(..., { slot = 1 })", { a.id })
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  child.cmd("Hiraishin seal 2")
+  child.lua([[require("hiraishin").update(require("hiraishin").at_cursor().id, { name = "keep" })]])
+  child.api.nvim_win_set_cursor(0, { 5, 0 })
+  child.cmd("Hiraishin seal 3")
+  child.cmd("Hiraishin add") -- placing it explicitly adopts it
+  child.lua([[require("hiraishin").update("keep", { slot = false })]])
+  child.lua("require('hiraishin').update(..., { slot = false })", { a.id })
+  child.cmd("Hiraishin seal clear")
+  eq(child.signs(), { ["1"] = "⚡", ["3"] = "⚡", ["5"] = "⚡" })
+end
+
+T["seals"]["clearing a seal in the manager drops a seal-only kunai"] = function()
+  main_lua(2)
+  child.cmd("Hiraishin seal 4")
+  child.cmd("Hiraishin manager")
+  local line = child.api.nvim_buf_get_lines(0, 0, 1, false)[1]
+  child.api.nvim_buf_set_lines(0, 0, 1, false, { (line:gsub("^4", "-")) })
+  child.cmd("write")
+  eq(#child.lua_get([[require("hiraishin").list()]]), 0)
+end
+
+T["seals"]["cycle through seals in order"] = function()
+  main_lua()
+  for line, n in pairs({ [6] = 1, [2] = 3, [4] = 7 }) do
+    child.api.nvim_win_set_cursor(0, { line, 0 })
+    child.lua("require('hiraishin').seal(...)", { n })
+  end
+  other_lua(1)
+  local function step(dir)
+    child.lua(
+      dir > 0 and [[require("hiraishin").next({ scope = "seal" })]] or [[require("hiraishin").prev({ scope = "seal" })]]
+    )
+    return { bufname(), cursor()[1] }
+  end
+  eq(step(1), { "main.lua", 6 }) -- seal 1
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Seal 1 of 3")
+  eq(step(1), { "main.lua", 2 }) -- seal 3
+  eq(step(1), { "main.lua", 4 }) -- seal 7
+  eq(step(1), { "main.lua", 6 }) -- wraps to seal 1
+  eq(step(-1), { "main.lua", 4 })
+  -- off a seal, cycling continues from the last seal jumped to
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  eq(step(-1), { "main.lua", 2 })
+  child.cmd("Hiraishin next seal")
+  eq(cursor()[1], 4)
+end
+
+T["seals"]["cycling with no seals says how to make one"] = function()
+  main_lua(1)
+  eq(
+    child.lua_get([[select(2, require("hiraishin").next({ scope = "seal" }))]]),
+    "No seals in this list · <leader>h1 seals this line"
+  )
 end
 
 T["jump"] = MiniTest.new_set()
@@ -110,8 +188,8 @@ end
 
 T["jump"]["reports an empty seal or unknown name"] = function()
   main_lua(1)
-  eq(child.lua_get([[select(2, require("hiraishin").jump(5))]]), "seal 5 is empty")
-  eq(child.lua_get([[select(2, require("hiraishin").jump("nope"))]]), "no kunai 'nope'")
+  eq(child.lua_get([[select(2, require("hiraishin").jump(5))]]), "Seal 5 is empty · <leader>h5 seals this line")
+  eq(child.lua_get([[select(2, require("hiraishin").jump("nope"))]]), "No kunai 'nope'")
 end
 
 T["jump"]["reuses a window already showing the file"] = function()
@@ -198,7 +276,7 @@ T["next / prev"]["count and no-wrap"] = function()
   child.api.nvim_win_set_cursor(0, { 1, 0 })
   child.lua([[require("hiraishin").next({ count = 2 })]])
   eq(cursor()[1], 5)
-  eq(child.lua_get([[select(2, require("hiraishin").next({ wrap = false }))]]), "no kunai below")
+  eq(child.lua_get([[select(2, require("hiraishin").next({ wrap = false }))]]), "No kunai below")
   eq(cursor()[1], 5)
 end
 
@@ -260,7 +338,13 @@ local function virt_texts()
   end)()]])
 end
 
+local function always()
+  child.lua([[require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 },
+    signs = { style = "emoji" }, virt_text = { show = "always" } })]])
+end
+
 T["display"]["named kunai show their name, notes add an icon"] = function()
+  always()
   main_lua()
   place(1)
   place(3, "hello")
@@ -298,6 +382,7 @@ T["display"]["the name is drawn exactly once through place, name, rename, note, 
 end
 
 T["display"]["unchanged kunai keep their extmark"] = function()
+  always()
   main_lua()
   place(3, "hello")
   local before = child.lua_get([==[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").ns, 0, -1, {})[1][1]]==])
@@ -308,7 +393,7 @@ end
 
 T["display"]["virtual text and line highlight are configurable"] = function()
   child.lua([[require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 },
-    line_highlight = true, virt_text = { enabled = false } })]])
+    line_highlight = true, virt_text = { enabled = false, show = "always" } })]])
   main_lua()
   place(3, "hello")
   eq(virt_texts(), {})
@@ -384,6 +469,88 @@ T["keymaps"] = function()
   eq(child.lua_get([[vim.fn.maparg("<leader>j3", "n") ~= ""]]), true)
   eq(child.lua_get([[vim.fn.maparg("<leader>3", "n")]]), "")
   eq(child.lua_get([[vim.fn.maparg("<leader>h3", "n")]]), "")
+end
+
+local function cursor_virt()
+  return child.lua_get([[(function()
+    local out = {}
+    local ns = require("hiraishin.signs").cursor_ns
+    for _, m in ipairs(vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })) do
+      out[tostring(m[2] + 1)] = table.concat(vim.tbl_map(function(c) return c[1] end, m[4].virt_text))
+    end
+    return out
+  end)()]])
+end
+
+local function move(line)
+  child.api.nvim_win_set_cursor(0, { line, 0 })
+  child.lua([[require("hiraishin.tracker").cursor_virt(0)]])
+end
+
+T["display"]["by default the name shows only on the cursor line"] = function()
+  main_lua()
+  place(1, "top")
+  place(3, "hello")
+  eq(virt_texts(), {})
+  move(3)
+  eq(cursor_virt(), { ["3"] = "← hello" })
+  move(1)
+  eq(cursor_virt(), { ["1"] = "← top" })
+  move(2)
+  eq(cursor_virt(), {})
+end
+
+T["display"]["the cursor-line name follows CursorMoved"] = function()
+  main_lua()
+  place(3, "hello")
+  child.type_keys("gg")
+  eq(cursor_virt(), {})
+  child.type_keys("2j")
+  eq(cursor_virt(), { ["3"] = "← hello" })
+end
+
+T["display"]["sign style presets and explicit icons"] = function()
+  local function icons(opts)
+    child.lua(
+      "require('hiraishin').setup(vim.tbl_deep_extend('force', { storage = { dir = T.storage, debounce_ms = 0 } }, ...))",
+      { opts }
+    )
+    return child.lua_get([[{ require("hiraishin.signs").icons() }]])
+  end
+  eq(icons({ signs = { style = "ascii" } }), { "*", "?" })
+  eq(icons({ signs = { style = "emoji" } }), { "⚡", "!" })
+  eq(icons({ signs = { style = "nerd" } }), { "\u{f02e}", "\u{f097}" })
+  eq(icons({ signs = { style = "ascii", icon = "B" } }), { "B", "?" })
+end
+
+T["display"]["jumping flashes the target line"] = function()
+  main_lua()
+  place(5, "there")
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.lua([[require("hiraishin").jump("there")]])
+  local marks =
+    child.lua_get([[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").flash_ns, 0, -1, { details = true })]])
+  eq(#marks, 1)
+  eq({ marks[1][2], marks[1][4].hl_group }, { 4, "HiraishinFlash" })
+  vim.loop.sleep(600)
+  eq(#child.lua_get([[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").flash_ns, 0, -1, {})]]), 0)
+end
+
+T["display"]["notes appear in a hover float"] = function()
+  main_lua()
+  place(3, "hello")
+  child.lua([[require("hiraishin").update("hello", { note = "remember **this**" })]])
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  local win = child.lua_get([[require("hiraishin.note").hover()]])
+  eq(type(win), "number")
+  local text = child.lua_get(
+    [[table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(...), 0, -1, false), " ")]],
+    { win }
+  )
+  eq(text:find("remember", 1, true) ~= nil, true)
+  child.lua("vim.api.nvim_win_close(..., true)", { win })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  eq(child.lua_get([[require("hiraishin.note").hover()]]), vim.NIL)
 end
 
 return T

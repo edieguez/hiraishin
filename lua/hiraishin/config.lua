@@ -22,14 +22,17 @@ M.defaults = {
   signs = {
     enabled = true,
     priority = 15,
-    icon = "⚡",
-    stale_icon = "!",
+    -- "nerd" (Nerd Font bookmark glyphs, recolorable), "ascii" or "emoji"
+    style = "nerd",
+    icon = false, -- a string overrides the style's icon
+    stale_icon = false, -- a string overrides the style's stale icon
     show_slot = true,
     numhl = false,
   },
   line_highlight = false,
   virt_text = {
     enabled = true,
+    show = "cursorline", -- "cursorline": only on the line you are on; "always"
     only_named = true, -- unnamed kunai only show the note icon (if any)
     position = "eol", -- "eol" | "right_align"
     prefix = "← ",
@@ -38,15 +41,19 @@ M.defaults = {
   name = {
     suggest_from_treesitter = true,
   },
+  note_hover = true, -- show a kunai's note in a float when the cursor rests on it
   jump = {
     reuse_window = true, -- jump to a window already showing the file
     center = true, -- zz after jumping
     open_folds = true, -- zv after jumping
+    flash = true, -- briefly highlight the line you land on
+    flash_ms = 350,
   },
   picker = {
     backend = "auto", -- "auto" | "snacks" | "telescope" | "fzf-lua" | "mini" | "select"
     sort = "recent", -- after sealed kunai: "recent" | "manual" | "path" | "created"
     show_notes = true,
+    icons = true, -- file icons from mini.icons / nvim-web-devicons when installed
     keys = {
       vsplit = "<C-v>",
       split = "<C-s>",
@@ -55,17 +62,22 @@ M.defaults = {
       rename = "<C-e>",
       note = "<C-o>",
       quickfix = "<C-q>",
+      list = "<C-l>", -- switch list, then reopen
     },
   },
   manager = {
     width = 0.8, -- fraction of the editor
     height = 0.6,
     border = "rounded",
-    confirm_delete = true,
+    confirm_delete = false, -- deletions can be undone (:Hiraishin undo)
   },
   undo_history = 20, -- deletions :Hiraishin undo can bring back
+  -- routine feedback: "echo" (command line), "notify" (toasts) or "silent";
+  -- warnings and errors always use vim.notify
+  messages = "echo",
   -- ask before toggling off a kunai that has a name or a note
-  confirm_remove_named = true,
+  -- (off: removals say how to undo them instead)
+  confirm_remove_named = false,
   -- false disables all default keymaps; a table overrides per action
   keymaps = true,
 }
@@ -137,8 +149,17 @@ local function validate(o)
   end
   check("signs.enabled", o.signs.enabled, "boolean")
   check("signs.priority", o.signs.priority, "number")
-  check("signs.icon", o.signs.icon, "string")
-  check("signs.stale_icon", o.signs.stale_icon, "string")
+  check("signs.icon", o.signs.icon, { "string", "boolean" })
+  check("signs.stale_icon", o.signs.stale_icon, { "string", "boolean" })
+  if o.signs.style ~= "nerd" and o.signs.style ~= "ascii" and o.signs.style ~= "emoji" then
+    error("hiraishin: signs.style: expected 'nerd', 'ascii' or 'emoji'", 0)
+  end
+  if o.virt_text.show ~= "cursorline" and o.virt_text.show ~= "always" then
+    error("hiraishin: virt_text.show: expected 'cursorline' or 'always'", 0)
+  end
+  check("note_hover", o.note_hover, "boolean")
+  check("jump.flash", o.jump.flash, "boolean")
+  check("jump.flash_ms", o.jump.flash_ms, "number")
   check("signs.show_slot", o.signs.show_slot, "boolean")
   check("signs.numhl", o.signs.numhl, "boolean")
   check("line_highlight", o.line_highlight, "boolean")
@@ -162,6 +183,7 @@ local function validate(o)
     error("hiraishin: picker.sort: expected recent, manual, path or created", 0)
   end
   check("picker.show_notes", o.picker.show_notes, "boolean")
+  check("picker.icons", o.picker.icons, "boolean")
   for name, key in pairs(o.picker.keys) do
     check("picker.keys." .. name, key, { "string", "boolean" })
   end
@@ -171,6 +193,9 @@ local function validate(o)
   check("manager.confirm_delete", o.manager.confirm_delete, "boolean")
   check("undo_history", o.undo_history, "number")
   check("confirm_remove_named", o.confirm_remove_named, "boolean")
+  if o.messages ~= "echo" and o.messages ~= "notify" and o.messages ~= "silent" then
+    error("hiraishin: messages: expected 'echo', 'notify' or 'silent'", 0)
+  end
   check("keymaps", o.keymaps, { "boolean", "table" })
 end
 
@@ -182,7 +207,7 @@ function M.setup(opts)
   M.unknown = {}
   collect_unknown(M.defaults, opts, "", M.unknown)
   if #M.unknown > 0 then
-    vim.notify("hiraishin: unknown config keys: " .. table.concat(M.unknown, ", "), vim.log.levels.WARN)
+    vim.notify("unknown config keys: " .. table.concat(M.unknown, ", "), vim.log.levels.WARN, { title = "Hiraishin" })
   end
   merged.storage.dir = vim.fs.normalize(merged.storage.dir)
   M.options = merged

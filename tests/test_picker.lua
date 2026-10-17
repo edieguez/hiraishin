@@ -169,9 +169,8 @@ end
 
 T["pick with nothing to show"] = function()
   main_lua(1)
-  child.lua([[_G.msgs = {}; vim.notify = function(m) table.insert(_G.msgs, m) end]])
   child.cmd("Hiraishin pick")
-  eq(child.lua_get("_G.msgs[1]"), "hiraishin: no kunai yet")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "No kunai yet · <leader>hh places one")
 end
 
 -- Real pickers ---------------------------------------------------------------
@@ -339,7 +338,7 @@ T["fzf-lua"]["feeds path:line:col lines with preview and key actions"] = functio
   eq(child.lua_get("_G.fzf.opts.cwd"), child.T("proj_a"))
   local keys = child.lua_get("vim.tbl_keys(_G.fzf.opts.actions)")
   table.sort(keys)
-  eq(keys, { "ctrl-d", "ctrl-e", "ctrl-o", "ctrl-q", "ctrl-s", "ctrl-t", "ctrl-v", "enter" })
+  eq(keys, { "ctrl-d", "ctrl-e", "ctrl-l", "ctrl-o", "ctrl-q", "ctrl-s", "ctrl-t", "ctrl-v", "enter" })
 end
 
 T["fzf-lua"]["enter jumps, ctrl-d deletes with reload"] = function()
@@ -364,6 +363,86 @@ T["keymaps"] = function()
   eq(child.lua_get([[vim.fn.maparg("<leader>hf", "n")]]), "<Cmd>Hiraishin pick<CR>")
   eq(child.lua_get([[vim.fn.maparg("<leader>hF", "n")]]), "<Cmd>Hiraishin pick all<CR>")
   eq(child.lua_get([[vim.fn.maparg("<leader>hq", "n")]]), "<Cmd>Hiraishin quickfix<CR>")
+end
+
+T["polish"] = MiniTest.new_set()
+
+T["polish"]["titles say what is listed and how many"] = function()
+  fixture()
+  child.lua([[vim.ui.select = function(items, opts) _G.prompt = opts.prompt end]])
+  child.cmd("Hiraishin pick")
+  eq(child.lua_get("_G.prompt"), "Kunai · default (3)")
+  child.cmd("Hiraishin pick buffer")
+  eq(child.lua_get("_G.prompt"), "Kunai · this file (2)")
+  child.cmd("Hiraishin pick all")
+  eq(child.lua_get("_G.prompt"), "Kunai · all lists (3)")
+end
+
+T["polish"]["file icons come from nvim-web-devicons or mini.icons when present"] = function()
+  fixture()
+  eq(entries()[1].icon, nil)
+  child.lua([[package.preload["nvim-web-devicons"] = function()
+    return { get_icon = function(name, ext) return ext == "lua" and "L" or "?", "DevIconLua" end }
+  end]])
+  local e = entries()[1]
+  eq({ e.icon, e.icon_hl }, { "L", "DevIconLua" })
+  child.lua([[require("mini.icons").setup()]])
+  eq(type(entries()[1].icon), "string")
+  child.lua([[require("hiraishin.config").options.picker.icons = false]])
+  eq(entries()[1].icon, nil)
+end
+
+T["polish"]["the list key switches lists and reopens the picker"] = function()
+  child.lua([[vim.opt.rtp:prepend(HIRAISHIN_DEPS .. "/snacks.nvim")]])
+  child.lua([[require("snacks").setup({ picker = { enabled = true } })]])
+  fixture()
+  child.lua([[require("hiraishin").set_list("bugs")]])
+  place(6, "bug")
+  child.lua([[require("hiraishin").set_list("default")]])
+  child.cmd("Hiraishin pick")
+  wait("Snacks.picker.get()[1] ~= nil and #Snacks.picker.get()[1]:items() == 3")
+  child.lua([[vim.ui.select = function(items, opts, cb) vim.schedule(function() cb("bugs") end) end]])
+  child.type_keys("<C-l>")
+  eq(wait([[require("hiraishin").lists() and select(2, require("hiraishin").lists()) == "bugs"]]), true)
+  eq(wait("Snacks.picker.get()[1] ~= nil and #Snacks.picker.get()[1]:items() == 1"), true)
+end
+
+T["integrations"] = MiniTest.new_set()
+
+T["integrations"]["Snacks.picker.hiraishin() opens the snacks picker"] = function()
+  child.lua([[vim.opt.rtp:prepend(HIRAISHIN_DEPS .. "/snacks.nvim")]])
+  child.lua([[require("snacks").setup({ picker = { enabled = true } })]])
+  child.lua([[require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 } })]])
+  fixture()
+  wait("Snacks.picker.hiraishin ~= nil")
+  child.lua([[Snacks.picker.hiraishin({ filter = "buffer" })]])
+  eq(wait("Snacks.picker.get()[1] ~= nil and #Snacks.picker.get()[1]:items() == 2"), true)
+end
+
+T["integrations"][":Telescope hiraishin"] = function()
+  if child.fn.has("nvim-0.11") == 0 then
+    MiniTest.skip("telescope.nvim requires Neovim 0.11+")
+  end
+  child.lua([[vim.opt.rtp:prepend(HIRAISHIN_DEPS .. "/plenary.nvim")]])
+  child.lua([[vim.opt.rtp:prepend(HIRAISHIN_DEPS .. "/telescope.nvim")]])
+  child.lua([[require("telescope").setup({}); require("telescope").load_extension("hiraishin")]])
+  fixture()
+  child.lua([[require("telescope").extensions.hiraishin.all()]])
+  eq(wait(TELE_COUNT .. " == 3"), true)
+end
+
+T["integrations"]["which-key gets a group label"] = function()
+  child.lua([[package.loaded["which-key"] = { add = function(spec) _G.wk = spec end }]])
+  child.lua([[vim.g.mapleader = " "; require("hiraishin").setup({ storage = { dir = T.storage } })]])
+  eq(wait("_G.wk ~= nil"), true)
+  eq(child.lua_get("{ _G.wk[1][1], _G.wk[1].group }"), { "<leader>h", "hiraishin" })
+end
+
+T["integrations"]["the lualine component opens the picker on click"] = function()
+  fixture()
+  child.lua([[vim.ui.select = function(items, opts) _G.prompt = opts.prompt end]])
+  child.lua([[require("hiraishin.integrations.lualine").on_click()]])
+  eq(child.lua_get("_G.prompt"), "Kunai · this file (2)")
 end
 
 return T

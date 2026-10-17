@@ -18,9 +18,16 @@ function M.open(p)
     return finders.new_table({
       results = entries,
       entry_maker = function(e)
+        local display = e.label
+        if e.icon then
+          local icon = e.icon .. " "
+          display = function()
+            return icon .. e.label, { { { 0, #e.icon }, e.icon_hl or "Normal" } }
+          end
+        end
         return {
           value = e,
-          display = e.label,
+          display = display,
           ordinal = e.ordinal,
           filename = e.abs,
           lnum = e.line,
@@ -88,6 +95,10 @@ function M.open(p)
           vim.schedule(function()
             core.actions.quickfix(entries)
           end)
+        end,
+        list = function()
+          actions.close(prompt_bufnr)
+          vim.schedule(p.switch_list)
         end,
       }
       for _, kind in ipairs({ "vsplit", "split", "tab" }) do

@@ -66,17 +66,82 @@ function M.git_branch(root)
   return ref ~= "" and ref or nil
 end
 
+-- :Hiraishin scope for this session; wins over project and config
+local session_scope ---@type string?
+
+---@param s string?
+function M.set_session_scope(s)
+  session_scope = s
+end
+
+-- root -> { key = "mtime", value = overrides }
+local overrides_cache = {}
+local ALLOWED_SCOPES = { project = true, global = true, branch = true }
+local ALLOWED_SORTS = { recent = true, manual = true, path = true, created = true }
+
+---Per-project settings from a `.hiraishin` file at the root, e.g.
+---  return { scope = "branch", picker = { sort = "manual" } }
+---Read through vim.secure.read (asks once whether to trust the file) and
+---evaluated with no access to Neovim. An empty file only marks the root.
+---@param root string?
+---@return { scope?: string, sort?: string }
+function M.project_overrides(root)
+  if not root then
+    return {}
+  end
+  local path = root .. "/.hiraishin"
+  local stat = vim.uv.fs_stat(path)
+  if not stat or stat.type ~= "file" or stat.size == 0 then
+    return {}
+  end
+  local key = stat.mtime.sec .. "." .. stat.mtime.nsec
+  local cached = overrides_cache[root]
+  if cached and cached.key == key then
+    return cached.value
+  end
+  local value = {}
+  local ok_read, content = pcall(vim.secure.read, path)
+  if ok_read and type(content) == "string" then
+    local chunk = load(content, "@" .. path, "t", {})
+    local ok, t = pcall(chunk or error)
+    if ok and type(t) == "table" then
+      if ALLOWED_SCOPES[t.scope] then
+        value.scope = t.scope
+      end
+      if type(t.picker) == "table" and ALLOWED_SORTS[t.picker.sort] then
+        value.sort = t.picker.sort
+      end
+    else
+      require("hiraishin.util").notify(path .. ' should return a table, e.g. { scope = "branch" }', vim.log.levels.WARN)
+    end
+  end
+  overrides_cache[root] = { key = key, value = value }
+  return value
+end
+
+---Scope in effect for a root: session > project .hiraishin > config.
+---@param root? string
+---@return string
+function M.effective_scope(root)
+  if session_scope then
+    return session_scope
+  end
+  root = root or M.find_root(require("hiraishin.util").realpath(vim.uv.cwd()))
+  return M.project_overrides(root).scope or config.options.scope
+end
+
 ---@param root string?
 ---@return hiraishin.Context
 local function make(root, abs)
   local o = config.options
-  local ctx = { scope = o.scope }
-  if o.scope == "global" then
+  local scope_name = M.effective_scope(root)
+  local ctx = { scope = scope_name }
+  if scope_name == "global" then
     ctx.store = o.storage.dir .. "/global.json"
   else
     ctx.root = root
     ctx.store = o.storage.dir .. "/projects/" .. M.store_name(root)
-    if o.scope == "branch" then
+    if scope_name == "branch" then
       local branch = M.git_branch(root)
       if branch then
         ctx.branch = branch
@@ -97,7 +162,7 @@ end
 ---@param bufnr? integer
 ---@return hiraishin.Context
 function M.for_path(abs, bufnr)
-  local root = config.options.scope ~= "global" and M.find_root(abs, bufnr) or nil
+  local root = M.find_root(abs, bufnr)
   return make(root, abs)
 end
 
@@ -128,7 +193,7 @@ end
 ---@return hiraishin.Context
 function M.for_cwd()
   local cwd = util.realpath(vim.uv.cwd())
-  local root = config.options.scope ~= "global" and M.find_root(cwd) or nil
+  local root = M.find_root(cwd)
   return make(root)
 end
 

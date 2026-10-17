@@ -112,7 +112,24 @@ T["apply"]["reordering lines reorders the list"] = function()
   eq(names(), { "ret", "hello", "-" })
 end
 
-T["apply"]["deleting lines deletes kunai (after confirming) and :Hiraishin undo restores them"] = function()
+T["apply"]["deleting lines deletes kunai and :Hiraishin undo restores them"] = function()
+  fixture()
+  child.cmd("Hiraishin manager")
+  child.type_keys("d", "d")
+  child.cmd("write")
+  eq(names(), { "ret", "-" })
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Deleted 1 kunai · <leader>hu to undo")
+  child.cmd("close")
+  child.cmd("Hiraishin undo")
+  eq(names(), { "hello", "ret", "-" })
+  eq(slot("hello"), 1)
+  eq(child.lua_get([[require("hiraishin").get("hello").note]]), "first\nsecond")
+end
+
+T["apply"]["manager.confirm_delete = true asks first"] = function()
+  child.lua(
+    [[require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 }, manager = { confirm_delete = true } })]]
+  )
   fixture()
   child.cmd("Hiraishin manager")
   child.lua([[_G.asked = nil; vim.fn.confirm = function(msg) _G.asked = msg; return 1 end]])
@@ -128,6 +145,9 @@ T["apply"]["deleting lines deletes kunai (after confirming) and :Hiraishin undo 
 end
 
 T["apply"]["declining the delete applies nothing"] = function()
+  child.lua(
+    [[require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 }, manager = { confirm_delete = true } })]]
+  )
   fixture()
   child.cmd("Hiraishin manager")
   child.lua([[vim.fn.confirm = function() return 2 end]])
@@ -228,19 +248,18 @@ T["undo"]["brings back toggle, delete, picker and prune removals in order"] = fu
   eq(names(), { "hello", "-" })
   child.cmd("Hiraishin undo")
   eq(names(), { "hello", "ret", "-" })
-  child.lua([[_G.msgs = {}; vim.notify = function(m) table.insert(_G.msgs, m) end]])
   child.cmd("Hiraishin undo")
-  eq(child.lua_get("_G.msgs[1]"), "hiraishin: nothing to undo")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Nothing to undo")
 end
 
 T["undo"]["skips a line that has a kunai again and frees a taken seal"] = function()
   fixture()
   child.cmd("Hiraishin delete hello")
   place(3, "newcomer")
-  child.lua([[_G.msgs = {}; vim.notify = function(m) table.insert(_G.msgs, m) end]])
+  child.lua([[vim.notify = function() end]])
   child.cmd("Hiraishin undo")
-  eq(child.lua_get("_G.msgs[1]"):match("restored 0 kunai") ~= nil, true)
-  eq(child.lua_get("_G.msgs[1]"):match("already has a kunai") ~= nil, true)
+  eq(child.lua_get([[require("hiraishin.ui").last()]]):match("Restored 0 kunai") ~= nil, true)
+  eq(child.lua_get([[require("hiraishin.ui").last()]]):match("already has a kunai") ~= nil, true)
 end
 
 T["undo"]["is limited to undo_history entries"] = function()
@@ -251,6 +270,64 @@ T["undo"]["is limited to undo_history entries"] = function()
     child.cmd("Hiraishin toggle")
   end
   eq(child.lua_get([[require("hiraishin.history").size()]]), 2)
+end
+
+T["look"] = MiniTest.new_set()
+
+T["look"]["a winbar header lines up with the columns"] = function()
+  main_lua()
+  place(3, "hello")
+  child.cmd("Hiraishin manager")
+  local bar = child.lua_get("vim.wo.winbar"):gsub("^%%#[%w]+#", "")
+  local line = lines()[1]
+  eq(bar:find("│", 1, true), line:find("│", 1, true))
+  local _, second = line:find("│", line:find("│", 1, true) + 1, true)
+  local _, bar_second = bar:find("│", bar:find("│", 1, true) + 1, true)
+  eq(bar_second, second)
+  eq(vim.startswith(bar, "# │ name "), true)
+end
+
+T["look"]["columns are highlighted, stale kunai marked"] = function()
+  main_lua()
+  place(3, "hello")
+  child.lua([[require("hiraishin").update("hello", { slot = 2 })]])
+  child.cmd("Hiraishin manager")
+  local groups = child.lua_get([[vim.tbl_map(function(m) return m[4].hl_group end,
+    vim.api.nvim_buf_get_extmarks(0, require("hiraishin.manager").hl_ns, 0, -1, { details = true }))]])
+  table.sort(groups)
+  eq(groups, {
+    "HiraishinManagerPath",
+    "HiraishinManagerSep",
+    "HiraishinManagerSep",
+    "HiraishinManagerSep",
+    "HiraishinManagerSlot",
+  })
+  -- edits are re-highlighted
+  set_lines({ "- │ x │ src/main.lua:3 ! │ /" .. lines()[1]:match("/(%x+)$") })
+  child.lua([[vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })]])
+  groups = child.lua_get([[vim.tbl_map(function(m) return m[4].hl_group end,
+    vim.api.nvim_buf_get_extmarks(0, require("hiraishin.manager").hl_ns, 0, -1, { details = true }))]])
+  eq(vim.tbl_contains(groups, "HiraishinSignStale"), true)
+end
+
+T["look"]["the title shows unsaved edits"] = function()
+  main_lua()
+  place(3, "hello")
+  child.cmd("Hiraishin manager")
+  local function title()
+    return child.lua_get("vim.api.nvim_win_get_config(0).title[1][1]")
+  end
+  eq(title():find("●", 1, true), nil)
+  child.type_keys("dd")
+  eq(title():find("●", 1, true) ~= nil, true)
+  child.cmd("write")
+  eq(title():find("●", 1, true), nil)
+end
+
+T["look"]["an empty list says so in the winbar"] = function()
+  main_lua()
+  child.cmd("Hiraishin manager")
+  eq(child.lua_get("vim.wo.winbar"):find("No kunai in this list", 1, true) ~= nil, true)
 end
 
 return T

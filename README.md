@@ -1,17 +1,34 @@
 # hiraishin.nvim
 
-Project-aware bookmarks for Neovim. Place a **kunai** on a line, name it, and
-come back to it across edits, restarts and projects.
+Bookmarks for Neovim that stay on their line. Place a **kunai** on a line, give
+it a name or a note, and come back to it later: after edits, restarts,
+`git pull`, renames, and in every project you work on.
 
-All six phases of the spec are in: storage, line tracking, seals and
-navigation, picker, manager and lists. `:h hiraishin` has the full manual.
+Put a **seal** (1–9) on the places you visit all the time and jump to them with
+one key, the way Minato jumps to his marked kunai.
+
+- **Kunai follow your code.** Extmarks track edits while a file is open. After
+  changes made outside Neovim, each kunai finds its line again from the text it
+  remembers. A kunai that can't be found is marked stale, never dropped.
+- **Seals 1–9 for quick jumps.** `<leader>h3` seals a line, `<leader>3` jumps
+  back to it, and `<leader>hj` / `<leader>hk` cycle through your seals.
+- **Per project, per branch, or global.** One store per git root by default.
+- **Fits your setup.** Uses the picker you already have (snacks, telescope,
+  fzf-lua, mini.pick), labels its which-key group and has a lualine component.
+- **Edit everything as text.** A manager buffer for seals, names, notes, order
+  and deletions. `:w` applies your changes, and everything can be undone.
+
+`:h hiraishin` has the full manual.
 
 ## Requirements
 
-- Neovim 0.10+
-- No dependencies
+- Neovim **0.10+**
+- Optional: a [Nerd Font](https://www.nerdfonts.com) for the default sign glyphs
+  (or use `signs = { style = "ascii" }`), and a picker plugin.
 
-## Install (lazy.nvim)
+## Installation
+
+[lazy.nvim](https://github.com/folke/lazy.nvim) / LazyVim:
 
 ```lua
 {
@@ -21,39 +38,96 @@ navigation, picker, manager and lists. `:h hiraishin` has the full manual.
 }
 ```
 
-## Usage
+Call `require("hiraishin").setup({})` with any other plugin manager. In LazyVim
+the picker follows your `vim.g.lazyvim_picker`.
+
+## Quick start
+
+1. `<leader>hh` places a kunai on the current line (press it again to remove it).
+2. `<leader>ha` places a **named** kunai. It suggests the enclosing function.
+3. `<leader>h1` seals the line as **1**. From anywhere in the project,
+   `<leader>1` jumps back to it and `<C-o>` returns you.
+4. `<leader>hf` finds kunai in a picker with preview.
+5. `<leader>he` opens the manager to rename, reorder or delete kunai in bulk.
+
+Removed something by accident? `<leader>hu` brings it back.
+
+## Keymaps
+
+Keymaps are only set where nothing else is mapped. Each one can be changed or
+turned off (see [Configuration](#configuration)).
+
+**Placing**
 
 | Key | Command | Action |
 | --- | --- | --- |
-| `<leader>hh` | `:Hiraishin toggle` | Place or remove a kunai on the current line |
-| `<leader>ha` | `:Hiraishin! add` | Place or rename a named kunai (suggests the enclosing function, if any) |
+| `<leader>hh` | `:Hiraishin toggle` | Place or remove a kunai on this line |
+| `<leader>ha` | `:Hiraishin! add` | Place or rename a named kunai |
 | `<leader>hn` | `:Hiraishin note` | Edit the kunai's note in a float (`:w` saves, `q` closes) |
-| `<leader>hd` | `:Hiraishin delete [name]` | Remove the kunai on the line, or by name |
-| `<leader>h1`…`9` | `:Hiraishin seal {1-9}` | Put seal 1–9 on this line's kunai (`seal clear` removes it) |
-| `<leader>1`…`9` | `:Hiraishin jump {1-9}` | Jump to the kunai with that seal |
-| | `:Hiraishin jump {name} [vsplit\|split\|tab]` | Jump by name |
+| `<leader>hd` | `:Hiraishin delete [name]` | Remove the kunai on this line, or one by name |
+| `<leader>hu` | `:Hiraishin undo` | Bring back the last removal |
+
+**Seals: quick jumps**
+
+| Key | Command | Action |
+| --- | --- | --- |
+| `<leader>h1`…`9` | `:Hiraishin seal {1-9}` | Seal this line with that number |
+| `<leader>1`…`9` | `:Hiraishin jump {1-9}` | Jump to that seal |
+| `<leader>hj` / `<leader>hk` | `:Hiraishin next seal` / `prev seal` | Cycle through seals in order (1 → 9) |
+| | `:Hiraishin seal clear` | Remove the seal from this line |
+
+**Moving around**
+
+| Key | Command | Action |
+| --- | --- | --- |
 | `]m` / `[m` | `:Hiraishin next` / `prev` | Next / previous kunai in this buffer (takes a count) |
 | `]M` / `[M` | `:Hiraishin next list` / `prev list` | Next / previous kunai across files, in list order |
-| `<leader>hf` | `:Hiraishin pick` | Find a kunai, with preview (`pick buffer` for this file only) |
+| | `:Hiraishin jump {name} [vsplit\|split\|tab]` | Jump by name |
+
+**Finding and editing**
+
+| Key | Command | Action |
+| --- | --- | --- |
+| `<leader>hf` | `:Hiraishin pick [buffer]` | Find a kunai (`buffer`: only this file) |
 | `<leader>hF` | `:Hiraishin pick all` | Find across every list |
-| `<leader>hq` | `:Hiraishin quickfix [all]` | Send kunai to the quickfix list (`:Hiraishin loclist` for the location list) |
-| `<leader>he` | `:Hiraishin manager` | Edit the list in a buffer: seals, names, notes, order, deletions |
-| `<leader>hu` | `:Hiraishin undo` | Bring back the last deleted kunai |
-| `<leader>hl` | `:Hiraishin list [name]` | Switch list (creates it if new); `list delete {name}` |
-| | `:Hiraishin scope project\|global\|branch` | Switch scope for this session |
-| | `:Hiraishin import marks` | Turn global marks A–Z into kunai |
+| `<leader>he` | `:Hiraishin manager` | Edit the list as a buffer |
+| `<leader>hq` | `:Hiraishin quickfix [all]` | Send the kunai to the quickfix list (`:Hiraishin loclist` for the location list) |
+| `<leader>hl` | `:Hiraishin list [name]` | Switch list, or create one; `list delete {name}` |
 
-**Seals** are numbered slots: a kunai can hold one, and putting a seal that is
-already taken on another kunai moves it there. The sign column shows the seal
-number instead of ⚡. Jumps add to the jumplist, so `<C-o>` takes you back,
-and they reuse a window that already shows the file.
+**Other commands:** `:Hiraishin scope project|global|branch` (for this
+session), `:Hiraishin relocate [name]` (move a kunai to the cursor; with no
+name, pick among stale ones), `:Hiraishin prune` (remove stale kunai) and
+`:Hiraishin import marks` (turn global marks A–Z into kunai). A bare
+`:Hiraishin` opens the picker.
 
-### Picker
+> `]m` / `[m` replace Vim's "next method start" motions. To keep those, set
+> `keymaps = { next = false, prev = false }`.
+
+## Seals
+
+Seals are quick jumps, like harpoon's slots, numbered 1–9 within each list:
+
+- Sealing a line with no kunai creates one just for the seal. When that seal
+  is cleared or moved to another line, that kunai goes with it, so no
+  leftover bookmark stays behind.
+- A kunai you placed yourself, named or gave a note to keeps living without
+  its seal.
+- Using a number that is already taken moves the seal to the new line.
+- `<leader>hj` / `<leader>hk` step through the seals in number order. When the
+  cursor isn't on a seal, they continue from the last seal you jumped to.
+- The sign column shows the seal number instead of the bookmark icon.
+
+Jumps go to the jumplist (`<C-o>` returns) and reuse a window that already
+shows the file. The line you land on flashes briefly.
+
+## Picker
 
 The picker uses whichever one you have: **snacks.picker**, **telescope**,
-**fzf-lua** or **mini.pick** (in LazyVim it follows your `vim.g.lazyvim_picker`),
-falling back to `vim.ui.select`. Sealed kunai come first, by seal number, then
-the rest by `picker.sort`. Inside the picker:
+**fzf-lua** or **mini.pick**. Without any of those it falls back to
+`vim.ui.select`. Sealed kunai come first in seal order, followed by the rest,
+sorted by `picker.sort`. The title shows the list and the count, for example
+`Kunai · default (5)`, and files get icons from mini.icons or
+nvim-web-devicons.
 
 | Key | Action |
 | --- | --- |
@@ -63,73 +137,116 @@ the rest by `picker.sort`. Inside the picker:
 | `<C-e>` | Rename |
 | `<C-o>` | Edit the note |
 | `<C-q>` | Send the results to the quickfix list |
+| `<C-l>` | Switch to another list and reopen |
 
-All of these are configurable under `picker.keys`. `vim.ui.select` can only
-jump, and mini.pick splits with its own `<C-s>` / `<C-v>` / `<C-t>`.
+The keys can be changed under `picker.keys`. `vim.ui.select` can only jump,
+and mini.pick opens splits with its own keys.
 
-### Manager
+## Manager
 
-`<leader>he` opens the active list as a buffer, one line per kunai:
+`<leader>he` opens the active list as a buffer, one line per kunai, under a
+column header:
 
 ```
+# │ name       │ location                    │ note
 1 │ auth-entry │ internal/auth/handler.go:42 │ Token refresh starts here
-- │ -          │ cmd/server/main.go:17       │
+- │ -          │ cmd/server/main.go:17 !     │
 ```
 
-Change a seal (`1`–`9` or `-`), a name (`-` for none) or a note, move lines to
-reorder, delete lines to delete kunai, then `:w`. Problems (two kunai with one
-seal, a duplicate name, an edited path) show as diagnostics and nothing is
-applied. `<CR>` jumps, `<Tab>` shows the next list, `q` closes.
-`:Hiraishin undo` brings back deletions made anywhere.
+You can change a seal (`1`–`9`, or `-` for none), a name (`-` for none) or a
+note. Move lines to reorder, delete lines to remove kunai, then `:w`. Problems
+such as two kunai with one seal, a duplicate name or an edited path appear as
+diagnostics, and nothing is applied until they are fixed. A `●` in the title
+means unsaved edits, and `!` marks a stale kunai. `<CR>` jumps, `<Tab>` shows
+the next list, `q` closes and `g?` shows help.
 
-### Lists and scopes
+## Lists and scopes
 
-Lists group kunai, for example one per task: `:Hiraishin list bug-1234`
-creates and switches to it. Seals belong to the list, so `<leader>1` follows
-the list you are in. Scopes decide where lists live: per **project** (default),
-**global**, or per **branch**, where a new branch starts from the project's
-kunai and gets its own store on the first change. Checking out another branch
-swaps the kunai when Neovim regains focus.
+**Lists** group kunai, for example one per task: `:Hiraishin list bug-1234`
+creates the list and switches to it. Seals belong to the list, so `<leader>1`
+follows the list you are in.
 
-### Statusline
+**Scopes** decide where lists live:
 
-`require("hiraishin").status()` returns `⚡3 [bug-1234]`. For lualine:
+- `project` (default): one store per project root (`.git` or `.hiraishin`).
+- `branch`: one store per git branch. A new branch starts from the project's
+  kunai and gets its own file on the first change. After a checkout, the
+  kunai swap when Neovim regains focus.
+- `global`: one store for everything, with absolute paths.
+
+### Per-project settings
+
+An empty `.hiraishin` file only marks a project root. It can also return a
+table to set the scope and the picker sort for that project:
 
 ```lua
+-- .hiraishin
+return { scope = "branch", picker = { sort = "path" } }
+```
+
+The file is read through `vim.secure.read`, so Neovim asks before trusting it.
+Only these two settings are read from it. `:Hiraishin scope` still takes
+precedence for the current session.
+
+## Looks
+
+- **Signs:** `signs.style` sets the glyphs: `"nerd"` (a Nerd Font bookmark,
+  the default), `"ascii"` (`*` and `?`) or `"emoji"` (`⚡` and `!`).
+  `signs.icon` / `signs.stale_icon` override them.
+- **Names:** a kunai's name and note icon appear at the end of the line you
+  are on (`virt_text.show = "always"` shows them on every line).
+- **Notes:** rest the cursor on a kunai with a note to see it in a float
+  (`note_hover`).
+- **Messages:** routine feedback goes to the command line, starts with
+  `Hiraishin` and tells you the next key to press, for example
+  `Removed kunai 'auth' · <leader>hu to undo`. Use `messages = "notify"` for
+  toasts or `"silent"` for none. Warnings always use `vim.notify`.
+
+Highlight groups, each linked to a default you can override:
+`HiraishinSign`, `HiraishinSignSlot`, `HiraishinSignStale`, `HiraishinLine`,
+`HiraishinVirtText`, `HiraishinFlash`, `HiraishinStatus`,
+`HiraishinManagerSlot`, `HiraishinManagerPath`, `HiraishinManagerSep` and
+`HiraishinManagerHeader`.
+
+## Integrations
+
+```lua
+-- lualine: "<icon>3 [bug-1234]"; click it to pick from this file's kunai
 sections = { lualine_x = { require("hiraishin.integrations.lualine") } }
 ```
 
-`:checkhealth hiraishin` checks storage, config, picker and keymaps.
+- **which-key:** `<leader>h` is labelled `hiraishin`.
+- **telescope:** `require("telescope").load_extension("hiraishin")`, then
+  `:Telescope hiraishin` (also `hiraishin buffer` and `hiraishin all`).
+- **snacks:** `Snacks.picker.hiraishin({ filter = "all" })`.
+- **File managers:** renames in oil.nvim, mini.files, neo-tree and nvim-tree
+  are followed. Anything else can call
+  `require("hiraishin").rename(from, to)` for files or directories.
 
-`]m` / `[m` replace Vim's "next method start" motions; set
-`keymaps = { next = false, prev = false }` to keep those.
+`:checkhealth hiraishin` checks storage, config, picker and keymaps, and
+reports stale kunai.
 
-Removing a kunai that has a name or note asks for confirmation
-(`confirm_remove_named = false` to turn that off).
+## How kunai stay on their line
 
-| Command | Action |
-| --- | --- |
-| `:Hiraishin relocate [name]` | Move a kunai to the cursor line (no name: pick among stale ones) |
-| `:Hiraishin prune` | Remove stale kunai after confirming |
+- While a file is open, kunai follow your edits, and their new positions are
+  saved when you write the file. `:e!` brings back the saved positions.
+- Deleting a kunai's line makes it **stale**. `u` brings it back, and so does
+  typing or pasting that line again before the next write.
+- When a file changes outside Neovim (`git pull`, a formatter), each kunai is
+  found again from its line's text and the lines around it. The search looks
+  near the old line first, then in the whole file, then for a fuzzy match to
+  catch slightly edited lines.
+- Two Neovim instances can share a project. Each save merges the other
+  instance's changes (additions, removals, renames, seals) instead of
+  overwriting them.
 
-### Kunai stay on their line
-
-- While a file is open, kunai follow your edits. Their new positions are saved
-  when you write the file; `:e!` brings back the saved ones.
-- Deleting a kunai's line makes it **stale** (`!` sign); `u` brings it back,
-  and so does typing or pasting that line again before the next write.
-- When a file changed outside Neovim (`git pull`, `git checkout`, a formatter),
-  kunai are found again from the line text they remember and its neighbours:
-  first near the old line, then in the whole file, then by a fuzzy match for
-  slightly edited lines. Kunai that can't be found are kept as stale, never
-  dropped silently.
-- Renames follow along with `:saveas`, `:file`, oil.nvim, mini.files,
-  neo-tree and nvim-tree. Anything else can call
-  `require("hiraishin").rename(from, to)` (files or directories).
+Stores live in `stdpath("data")/hiraishin/` and are written atomically:
+`projects/<root>__<hash>.json` for each project (`…@<branch>.json` in branch
+scope), or `global.json`.
 
 ## Configuration
 
-Defaults:
+These are the defaults. Pass only what you want to change.
 
 ```lua
 require("hiraishin").setup({
@@ -151,56 +268,61 @@ require("hiraishin").setup({
   signs = {
     enabled = true,
     priority = 15,
-    icon = "⚡",
-    stale_icon = "!",
-    show_slot = true,             -- seal number replaces the icon
+    style = "nerd",               -- "nerd" | "ascii" | "emoji"
+    icon = false,                 -- a string overrides the style's icon
+    stale_icon = false,
+    show_slot = true,             -- the seal number replaces the icon
     numhl = false,
   },
   line_highlight = false,
   virt_text = {
     enabled = true,
+    show = "cursorline",          -- "cursorline" | "always"
     only_named = true,            -- unnamed kunai only show the note icon
     position = "eol",             -- "eol" | "right_align"
     prefix = "← ",
     note_icon = "✎",
   },
   name = { suggest_from_treesitter = true },
-  picker = {
-    backend = "auto",             -- "snacks" | "telescope" | "fzf-lua" | "mini" | "select"
-    sort = "recent",              -- after sealed kunai: "recent" | "manual" | "path" | "created"
-    show_notes = true,
-    keys = { vsplit = "<C-v>", split = "<C-s>", tab = "<C-t>", delete = "<C-d>",
-             rename = "<C-e>", note = "<C-o>", quickfix = "<C-q>" },
-  },
+  note_hover = true,
   jump = {
     reuse_window = true,
     center = true,                -- zz
     open_folds = true,            -- zv
+    flash = true,                 -- highlight the line you land on
+    flash_ms = 350,
   },
-  manager = { width = 0.8, height = 0.6, border = "rounded", confirm_delete = true },
+  picker = {
+    backend = "auto",             -- "snacks" | "telescope" | "fzf-lua" | "mini" | "select"
+    sort = "recent",              -- after sealed kunai: "recent" | "manual" | "path" | "created"
+    show_notes = true,
+    icons = true,
+    keys = {
+      vsplit = "<C-v>", split = "<C-s>", tab = "<C-t>", delete = "<C-d>",
+      rename = "<C-e>", note = "<C-o>", quickfix = "<C-q>", list = "<C-l>",
+    },
+  },
+  manager = { width = 0.8, height = 0.6, border = "rounded", confirm_delete = false },
   undo_history = 20,
-  confirm_remove_named = true,
-  keymaps = true,                 -- false disables all, or override per action:
+  messages = "echo",              -- "echo" | "notify" | "silent"
+  confirm_remove_named = false,   -- removals can be undone instead
+  keymaps = true,                 -- false disables all, or override per action
 })
 ```
 
-Keymap overrides: single actions (`toggle`, `add`, `note`, `delete`, `next`,
-`prev`, `next_list`, `prev_list`, `pick`, `pick_all`, `quickfix`, `manager`,
-`list`, `undo`) take a key or `false`; the nine-key groups
-`assign_slot` and `jump_slot` take a prefix or `false`:
+Keymap overrides: single actions (`toggle`, `add`, `note`, `delete`, `undo`,
+`next`, `prev`, `next_list`, `prev_list`, `next_seal`, `prev_seal`, `pick`,
+`pick_all`, `quickfix`, `manager`, `list`) take a key or `false`. The
+nine-key groups `assign_slot` and `jump_slot` take a prefix or `false`:
 
 ```lua
 keymaps = {
   toggle = "<leader>bb",
   jump_slot = "<leader>j",        -- <leader>j1 … <leader>j9
+  next_seal = "<leader>]",
   assign_slot = false,
 }
 ```
-
-Kunai are stored in `stdpath("data")/hiraishin/`:
-`projects/<root>__<hash>.json` per project (`…@<branch>.json` in branch
-scope) or `global.json`, written atomically. A store changed by another
-Neovim is reloaded when Neovim regains focus.
 
 ## Lua API
 
@@ -210,16 +332,16 @@ h.toggle()                                  --> bookmark, "added"|"removed"
 h.add({ name?, note?, bufnr?, line? })      --> bookmark | nil, err
 h.remove(id_or_name)
 h.update(id_or_name, { name?, note?, slot? }) -- false clears a field
-h.seal(n)                                   -- seal the cursor line's kunai
+h.seal(n)                                   -- seal the cursor line
 h.slot_of(id_or_name)
 h.jump(name_or_seal, { split? })
-h.next({ count?, wrap?, scope? = "buffer"|"list" })
+h.next({ count?, wrap?, scope? = "buffer"|"list"|"seal" })
 h.prev({ ... })
 h.note()
 h.pick({ filter? = "buffer"|"all", backend? })
 h.to_quickfix({ loclist?, all? })
 h.get(id_or_name)
-h.list({ bufnr?, include_stale? })           -- live line numbers
+h.list({ bufnr?, include_stale? })          -- with live line numbers
 h.at_cursor()
 h.relocate(id_or_name, { bufnr?, line? })
 h.stale({ all? })                           --> { { bookmark, list }, ... }
@@ -227,7 +349,7 @@ h.prune()
 h.rename(from, to)
 h.manager()
 h.undo()
-h.lists()                                   --> names, active
+h.lists()                                   --> names, active, counts
 h.set_list(name)
 h.delete_list(name)
 h.set_scope("project"|"global"|"branch")
@@ -235,14 +357,14 @@ h.import_marks()
 h.status()
 ```
 
-`User` events: `HiraishinAdd`, `HiraishinRemove`, `HiraishinUpdate`,
-`HiraishinMoved` (`data.reason`: edit, reanchor, rename, relocate),
-`HiraishinStale`, `HiraishinJump` (before a jump; `data.from` is where you were),
-`HiraishinListChanged`.
+`User` autocmd events: `HiraishinAdd`, `HiraishinRemove`, `HiraishinUpdate`,
+`HiraishinMoved` (`data.reason`: edit, reanchor, rename or relocate),
+`HiraishinStale`, `HiraishinJump` (fired before a jump; `data.from` is where
+you were) and `HiraishinListChanged`.
 
 ## Development
 
 ```sh
-make test          # fetches mini.nvim (and the picker plugins) into deps/ and runs the suite
+make test                                 # fetches mini.nvim and the pickers into deps/, runs the suite
 make test-file FILE=tests/test_store.lua
 ```

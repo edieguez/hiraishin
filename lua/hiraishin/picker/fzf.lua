@@ -99,6 +99,9 @@ function M.open(p)
         core.actions.quickfix(es)
       end)
     end,
+    list = function()
+      vim.schedule(p.switch_list)
+    end,
   }
   for name, fn in pairs(handlers) do
     local key = p.keys[name] and M.fzf_key(p.keys[name])

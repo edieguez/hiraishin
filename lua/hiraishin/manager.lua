@@ -16,6 +16,7 @@ local util = require("hiraishin.util")
 local M = {}
 
 M.ns = vim.api.nvim_create_namespace("hiraishin_manager")
+M.hl_ns = vim.api.nvim_create_namespace("hiraishin_manager_hl")
 
 local SEP = " │ "
 local NEWLINE = " ⏎ "
@@ -37,10 +38,10 @@ end
 ---Buffer lines for a list.
 ---@param ctx hiraishin.Context
 ---@param list hiraishin.List
----@return string[] lines, table<string, boolean> ids
+---@return string[] lines, table<string, boolean> ids, { name: integer, path: integer } widths
 function M.render_lines(ctx, list)
   local rows, ids = {}, {}
-  local wname, wpath = 1, 1
+  local wname, wpath = #"name", #"location"
   for _, bm in ipairs(list_ops.items(list)) do
     local line, invalid = tracker.live_line(ctx, bm)
     local stale = bm.stale or invalid
@@ -61,7 +62,64 @@ function M.render_lines(ctx, list)
     local text = r.slot .. SEP .. pad(r.name, wname) .. SEP .. pad(r.path, wpath) .. SEP .. r.note
     table.insert(lines, (text:gsub("%s+$", "")) .. " /" .. r.id)
   end
-  return lines, ids
+  return lines, ids, { name = wname, path = wpath }
+end
+
+---Column header matching render_lines' widths (shown in the winbar).
+---@param widths { name: integer, path: integer }
+---@return string
+function M.header(widths)
+  return "#" .. SEP .. pad("name", widths.name) .. SEP .. pad("location", widths.path) .. SEP .. "note"
+end
+
+---Highlight the columns of the buffer: seal, separators, dim path, stale marker.
+---@param buf integer
+function M.highlight(buf)
+  vim.api.nvim_buf_clear_namespace(buf, M.hl_ns, 0, -1)
+  for i, text in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+    local seps = {}
+    local from = 1
+    while true do
+      local s, e = text:find("│", from, true)
+      if not s then
+        break
+      end
+      table.insert(seps, { s - 1, e })
+      from = e + 1
+    end
+    local function hl(s, e, group)
+      vim.api.nvim_buf_set_extmark(buf, M.hl_ns, i - 1, s, { end_col = e, hl_group = group })
+    end
+    for _, sep in ipairs(seps) do
+      hl(sep[1], sep[2], "HiraishinManagerSep")
+    end
+    local slot_s, slot_e = text:find("^%s*[1-9]")
+    if slot_s and (not seps[1] or slot_e <= seps[1][1]) then
+      hl(slot_e - 1, slot_e, "HiraishinManagerSlot")
+    end
+    if seps[2] then
+      local path_end = seps[3] and seps[3][1] or (text:find("%s*/%x+%s*$") or #text + 1) - 1
+      local field = text:sub(seps[2][2] + 1, path_end)
+      local bang = field:find("%s!%s*$")
+      hl(seps[2][2], seps[2][2] + (bang or #field + 1) - 1, "HiraishinManagerPath")
+      if bang then
+        local at = seps[2][2] + field:find("!", bang, true) - 1
+        hl(at, at + 1, "HiraishinSignStale")
+      end
+    end
+  end
+end
+
+local function set_title(state)
+  if not vim.api.nvim_win_is_valid(state.win) then
+    return
+  end
+  local where = state.ctx.root and vim.fn.fnamemodify(state.ctx.root, ":~") or "global"
+  local dirty = vim.api.nvim_buf_is_valid(state.buf) and vim.bo[state.buf].modified
+  vim.api.nvim_win_set_config(state.win, {
+    title = string.format(" Kunai · %s · %s%s ", state.list, where, dirty and " ●" or ""),
+    title_pos = "center",
+  })
 end
 
 ---@class hiraishin.ManagerLine
@@ -146,18 +204,20 @@ end
 local function render(state)
   local data = store.get(state.ctx)
   local list = data.lists[state.list] or store.new_list()
-  local lines, ids = M.render_lines(state.ctx, list)
+  local lines, ids, widths = M.render_lines(state.ctx, list)
   state.ids = ids
   vim.bo[state.buf].modifiable = true
   vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, lines)
   vim.bo[state.buf].modified = false
   vim.diagnostic.reset(M.ns, state.buf)
+  M.highlight(state.buf)
+  set_title(state)
   if vim.api.nvim_win_is_valid(state.win) then
-    local where = state.ctx.root and vim.fn.fnamemodify(state.ctx.root, ":~") or "global"
-    vim.api.nvim_win_set_config(state.win, {
-      title = string.format(" Kunai · %s · %s ", state.list, where),
-      title_pos = "center",
-    })
+    if #lines == 0 then
+      vim.wo[state.win].winbar = "%#HiraishinManagerPath# No kunai in this list · <Tab> other list · q close"
+    else
+      vim.wo[state.win].winbar = "%#HiraishinManagerHeader#" .. M.header(widths):gsub("%%", "%%%%")
+    end
   end
 end
 
@@ -168,14 +228,14 @@ function M.apply(state)
   local data = store.get(state.ctx)
   local list = data.lists[state.list]
   if not list then
-    util.notify("list '" .. state.list .. "' no longer exists", vim.log.levels.WARN)
+    util.notify("List '" .. state.list .. "' no longer exists", vim.log.levels.WARN)
     return false
   end
   local rows, problems = M.parse(vim.api.nvim_buf_get_lines(state.buf, 0, -1, false), list)
   vim.diagnostic.set(M.ns, state.buf, problems)
   if #problems > 0 then
     util.notify(
-      string.format("%d problem%s in the manager; nothing applied", #problems, #problems == 1 and "" or "s"),
+      string.format("%d problem%s in the list · nothing applied", #problems, #problems == 1 and "" or "s"),
       vim.log.levels.WARN
     )
     return false
@@ -231,22 +291,41 @@ function M.apply(state)
       slots[slot] = id -- seals of kunai not on screen are untouched
     end
   end
+  local unsealed = {}
   for _, r in ipairs(rows) do
     local bm = list.bookmarks[r.id]
     local old_slot = list_ops.slot_of(list, r.id)
     if r.slot then
       slots[r.slot] = r.id
+    elseif old_slot then
+      table.insert(unsealed, { bm = bm, slot = old_slot })
     end
     if bm.name ~= r.name or bm.note ~= r.note or old_slot ~= r.slot then
       bm.name, bm.note, bm.updated_at = r.name, r.note, now
+      if bm.name or bm.note then
+        bm.seal_only = nil
+      end
       events.emit("HiraishinUpdate", { bookmark = vim.deepcopy(bm), list = state.list })
     end
   end
   list.slots = slots
+  -- seal-only kunai whose seal was cleared go away with it
+  local dropped = vim.tbl_count(require("hiraishin")._drop_unsealed(state.ctx, list, state.list, unsealed, "seal"))
 
   store.changed(state.ctx)
   tracker.reconcile({ store = state.ctx.store })
   render(state)
+  if #deleted + dropped > 0 then
+    util.notify(
+      string.format(
+        "Deleted %d kunai · %s to undo",
+        #deleted + dropped,
+        require("hiraishin.ui").hint("undo", ":Hiraishin undo")
+      )
+    )
+  else
+    util.notify("Kunai list updated")
+  end
   return true
 end
 
@@ -282,7 +361,7 @@ local function jump_cursor(state)
     return
   end
   if vim.bo[state.buf].modified then
-    return util.notify("apply (:w) or discard your edits first", vim.log.levels.WARN)
+    return util.notify("Apply (:w) or discard (q) your edits first", vim.log.levels.WARN)
   end
   local list = store.get(state.ctx).lists[state.list]
   local bm = list and list.bookmarks[row.id]
@@ -298,12 +377,12 @@ end
 
 local function cycle_list(state, step)
   if vim.bo[state.buf].modified then
-    return util.notify("apply (:w) or discard your edits first", vim.log.levels.WARN)
+    return util.notify("Apply (:w) or discard (q) your edits first", vim.log.levels.WARN)
   end
   local names = vim.tbl_keys(store.get(state.ctx).lists)
   table.sort(names)
   if #names < 2 then
-    return util.notify("only one list; :Hiraishin list {name} creates another")
+    return util.notify("Only one list · :Hiraishin list {name} creates another")
   end
   local idx = 1
   for i, n in ipairs(names) do
@@ -355,8 +434,6 @@ function M.open(opts)
   vim.wo[win].wrap = false
   vim.api.nvim_win_call(win, function()
     vim.fn.matchadd("Conceal", [[\s/\x\{8}$]], 10, -1, { conceal = "" })
-    vim.fn.matchadd("HiraishinManagerSlot", [[^\s*[1-9]\ze\s]], 10)
-    vim.fn.matchadd("NonText", "│", 10)
   end)
 
   local state = { ctx = ctx, list = opts.list or data.active_list, buf = buf, win = win, ids = {} }
@@ -369,6 +446,22 @@ function M.open(opts)
       M.apply(state)
     end,
   })
+  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+    buffer = buf,
+    callback = function()
+      M.highlight(buf)
+      set_title(state)
+    end,
+  })
+  -- BufModifiedSet is gone in newer Neovim; TextChanged covers edits there
+  if vim.fn.exists("##BufModifiedSet") == 1 then
+    vim.api.nvim_create_autocmd("BufModifiedSet", {
+      buffer = buf,
+      callback = function()
+        set_title(state)
+      end,
+    })
+  end
   vim.api.nvim_create_autocmd("WinLeave", {
     buffer = buf,
     callback = function()
