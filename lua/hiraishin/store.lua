@@ -125,6 +125,9 @@ local function normalize(data, root)
           list.slots[slot] = nil
         end
       end
+      if type(list.camp) ~= "string" or not list.bookmarks[list.camp] then
+        list.camp = nil
+      end
     end
   end
   data.lists.default = data.lists.default or M.new_list()
@@ -237,6 +240,9 @@ local function merge_list(base, ours, theirs)
       taken[id] = true
     end
   end
+  -- camp: a side that moved it wins
+  local camp = (ours.camp ~= base.camp) and ours.camp or ((theirs.camp ~= base.camp) and theirs.camp or base.camp)
+  out.camp = camp and out.bookmarks[camp] and camp or nil
   return out
 end
 

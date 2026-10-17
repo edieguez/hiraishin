@@ -3,6 +3,14 @@
 Versions are git tags (`git checkout v0.6.0`). Dates are when the version
 was tagged.
 
+## v0.10.0 — 2026-10-17
+
+- **Camp**: `m0` (`:Hiraishin camp`) makes a line the place you keep coming
+  back to while exploring; `g0` / `<BS>` (`:Hiraishin camp go`) go there from
+  any detour, and at camp go back out to where you were. One per list, not a
+  seal (`mm` never picks it), its own sign (`HiraishinSignCamp`,
+  `signs.camp_icon`); shown as `0` in the seal menu, statusline and manager
+
 ## v0.9.0 — 2026-10-17
 
 One keymap layout: anything with a number has no leader, everything else

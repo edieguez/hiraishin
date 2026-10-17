@@ -9,6 +9,7 @@ local M = {}
 ---@field list string
 ---@field bookmark hiraishin.Bookmark copy, line = live line at deletion
 ---@field slot string?
+---@field camp boolean? it was the list's camp
 ---@field index integer position in the list order
 
 ---@class hiraishin.HistoryEntry
@@ -42,7 +43,13 @@ function M.item(ctx, list_name, list, bm)
       break
     end
   end
-  return { list = list_name, bookmark = copy, slot = list_ops.slot_of(list, bm.id), index = index }
+  return {
+    list = list_name,
+    bookmark = copy,
+    slot = list_ops.slot_of(list, bm.id),
+    camp = list.camp == bm.id or nil,
+    index = index,
+  }
 end
 
 ---Remember one deletion (one entry, any number of kunai) in the store of `ctx`.

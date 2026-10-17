@@ -136,6 +136,9 @@ function M.delete(list, id)
   if slot then
     list.slots[slot] = nil
   end
+  if list.camp == id then
+    list.camp = nil
+  end
   return bm
 end
 

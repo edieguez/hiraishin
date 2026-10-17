@@ -595,12 +595,13 @@ T["quick seals"]["the menu lists seals, jumps and clears"] = function()
   main_lua(7)
   child.cmd("Hiraishin seals")
   local lines = child.api.nvim_buf_get_lines(0, 0, -1, false)
-  eq(#lines, 9)
-  eq(lines[1]:match("^ 1  —%s+src/main.lua:1%s+local M = {}") ~= nil, true)
-  eq(lines[2], " 2  ·")
-  eq(lines[3]:match("^ 3  gamma%s+src/other.lua:3%s+gamma") ~= nil, true)
+  eq(#lines, 10) -- the camp, then seals 1-9
+  eq(lines[1], " 0  · no camp (m0)")
+  eq(lines[2]:match("^ 1  —%s+src/main.lua:1%s+local M = {}") ~= nil, true)
+  eq(lines[3], " 2  ·")
+  eq(lines[4]:match("^ 3  gamma%s+src/other.lua:3%s+gamma") ~= nil, true)
   child.type_keys("d", "1") -- clears seal 1 (and the kunai it made)
-  eq(child.api.nvim_buf_get_lines(0, 0, 1, false)[1], " 1  ·")
+  eq(child.api.nvim_buf_get_lines(0, 1, 2, false)[1], " 1  ·")
   child.type_keys("3")
   eq({ bufname(), cursor()[1] }, { "other.lua", 3 })
   eq(child.lua_get([[require("hiraishin.seal_menu").current()]]), vim.NIL)
@@ -616,6 +617,102 @@ T["quick seals"]["the statusline lists the seals"] = function()
   eq(child.lua_get([[require("hiraishin").status()]]), "⚡1 · #2 5")
   local seals = child.lua_get([[require("hiraishin").seals()]])
   eq({ seals[1].seal, seals[1].here, seals[2].seal, seals[2].here }, { 2, false, 5, true })
+end
+
+T["camp"] = MiniTest.new_set()
+
+local function camp_sign()
+  return child.signs()
+end
+
+T["camp"]["m0 sets it, g0 goes there and back out"] = function()
+  child.lua(
+    [[vim.g.mapleader = " "; require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 }, signs = { style = "emoji" } })]]
+  )
+  main_lua(3)
+  child.type_keys("m", "0")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Camp set · g0 comes back here from anywhere")
+  eq(camp_sign(), { ["3"] = "⛺" })
+  -- a detour to another file
+  other_lua(5)
+  child.type_keys("g", "0")
+  eq({ bufname(), cursor()[1] }, { "main.lua", 3 })
+  -- at camp: the same key goes back out to the detour
+  child.type_keys("g", "0")
+  eq({ bufname(), cursor()[1] }, { "other.lua", 5 })
+  -- <BS> does the same
+  child.type_keys("<BS>")
+  eq({ bufname(), cursor()[1] }, { "main.lua", 3 })
+  child.type_keys("<BS>")
+  eq({ bufname(), cursor()[1] }, { "other.lua", 5 })
+  -- walked to camp by hand: nowhere to go back to
+  main_lua(3)
+  child.type_keys("g", "0")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "You are at camp")
+end
+
+T["camp"]["moving camp leaves no kunai behind; placed ones stay"] = function()
+  main_lua(3)
+  child.cmd("Hiraishin camp")
+  child.api.nvim_win_set_cursor(0, { 5, 0 })
+  child.cmd("Hiraishin camp")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Camp moved here · was main.lua:3")
+  eq(camp_sign(), { ["5"] = "⛺" })
+  -- a kunai placed on purpose survives losing the camp
+  place(1, "kept")
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.cmd("Hiraishin camp")
+  child.api.nvim_win_set_cursor(0, { 7, 0 })
+  child.cmd("Hiraishin camp")
+  eq(camp_sign(), { ["1"] = "⚡", ["7"] = "⛺" })
+  child.cmd("Hiraishin camp clear")
+  eq(camp_sign(), { ["1"] = "⚡" })
+  child.cmd("Hiraishin undo")
+  eq(camp_sign(), { ["1"] = "⚡", ["7"] = "⛺" })
+end
+
+T["camp"]["is not a seal: mm skips it, the menu and statusline show it as 0"] = function()
+  main_lua(3)
+  child.cmd("Hiraishin camp")
+  child.api.nvim_win_set_cursor(0, { 5, 0 })
+  child.cmd("Hiraishin seal")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Sealed as 1 · g1 jumps here")
+  eq(child.lua_get([[require("hiraishin").status()]]), "⚡2 · #0 1")
+  child.cmd("Hiraishin seals")
+  local lines = child.api.nvim_buf_get_lines(0, 0, -1, false)
+  eq(#lines, 10)
+  eq(lines[1]:match("^ 0  —%s+src/main.lua:3") ~= nil, true)
+  eq(lines[2]:match("^ 1  —%s+src/main.lua:5") ~= nil, true)
+  child.type_keys("0")
+  eq({ bufname(), cursor()[1] }, { "main.lua", 3 })
+  child.cmd("Hiraishin seals")
+  child.type_keys("d", "0")
+  eq(child.api.nvim_buf_get_lines(0, 0, 1, false)[1], " 0  · no camp (m0)")
+end
+
+T["camp"]["the manager shows it as 0 and can move it"] = function()
+  main_lua(3)
+  child.cmd("Hiraishin camp")
+  place(5, "five")
+  child.cmd("Hiraishin manager")
+  local lines = child.api.nvim_buf_get_lines(0, 0, -1, false)
+  eq(lines[1]:match("^0 │") ~= nil, true)
+  child.api.nvim_buf_set_lines(0, 0, -1, false, {
+    (lines[1]:gsub("^0", "-")),
+    (lines[2]:gsub("^%-", "0")),
+  })
+  child.cmd("write")
+  child.cmd("q")
+  eq(camp_sign(), { ["5"] = "⛺" }) -- the camp-only kunai on line 3 is gone
+  eq(child.lua_get([[require("hiraishin").camp().name]]), "five")
+end
+
+T["camp"]["survives a restart"] = function()
+  main_lua(3)
+  child.cmd("Hiraishin camp")
+  child.lua([[require("hiraishin.store").reset(); require("hiraishin.tracker").reset()]])
+  child.cmd("edit!")
+  eq(camp_sign(), { ["3"] = "⛺" })
 end
 
 return T

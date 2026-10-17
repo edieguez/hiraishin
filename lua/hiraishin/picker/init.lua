@@ -74,7 +74,7 @@ end
 local function label(e, show_list)
   local o = config.options
   local parts = {}
-  table.insert(parts, e.slot and ("[" .. e.slot .. "]") or "[ ]")
+  table.insert(parts, e.camp and "[0]" or e.slot and ("[" .. e.slot .. "]") or "[ ]")
   table.insert(parts, e.bookmark.name or "—")
   if show_list then
     table.insert(parts, "(" .. e.list .. ")")
@@ -155,6 +155,7 @@ function M.entries(opts)
           abs = abs,
           line = copy.line,
           end_line = copy.end_line,
+          camp = list.camp == bm.id or nil,
           col = bm.col or 0,
           text = file_lines(abs, copy.line, cache) or "",
           stale = copy.stale,
@@ -167,6 +168,9 @@ function M.entries(opts)
   local sort = scope.project_overrides(ctx.root).sort or config.options.picker.sort
   local sorter = SORTERS[sort] or SORTERS.recent
   table.sort(out, function(a, b)
+    if (a.camp ~= nil) ~= (b.camp ~= nil) then
+      return a.camp ~= nil -- camp first, then seals
+    end
     if (a.slot ~= nil) ~= (b.slot ~= nil) then
       return a.slot ~= nil
     end

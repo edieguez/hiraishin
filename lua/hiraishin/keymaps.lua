@@ -52,6 +52,27 @@ M.defaults = {
       require("hiraishin.commands").seal_free()
     end,
   },
+  camp = {
+    lhs = "m0",
+    desc = "Make this line the camp",
+    rhs = function()
+      require("hiraishin.commands").set_camp()
+    end,
+  },
+  go_camp = {
+    lhs = "g0",
+    desc = "Go to camp (at camp: back out)",
+    rhs = function()
+      report(h().go_camp())
+    end,
+  },
+  go_camp_alt = {
+    lhs = "<BS>",
+    desc = "Go to camp (at camp: back out)",
+    rhs = function()
+      report(h().go_camp())
+    end,
+  },
   seals = {
     lhs = "g<Space>",
     desc = "Seal menu",

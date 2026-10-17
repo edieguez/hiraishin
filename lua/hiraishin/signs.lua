@@ -28,6 +28,15 @@ M.PRESETS = {
 -- sign of a global kunai seen from a project, per style
 M.GLOBAL_ICONS = { nerd = "", ascii = "@", emoji = "🌐" }
 
+-- sign of the camp, per style
+M.CAMP_ICONS = { nerd = "", ascii = "^", emoji = "⛺" }
+
+---@return string
+function M.camp_icon()
+  local o = config.options.signs
+  return type(o.camp_icon) == "string" and o.camp_icon or (M.CAMP_ICONS[o.style] or M.CAMP_ICONS.nerd)
+end
+
 ---@return string
 function M.global_icon()
   local o = config.options.signs
@@ -50,6 +59,7 @@ function M.setup_highlights()
     HiraishinSignSlot = "DiagnosticHint",
     HiraishinSignStale = "DiagnosticWarn",
     HiraishinSignGlobal = "DiagnosticOk",
+    HiraishinSignCamp = "Special",
     HiraishinSignRange = "HiraishinSign",
     HiraishinLine = "CursorLine",
     HiraishinVirtText = "Comment",
@@ -101,6 +111,8 @@ function M.decoration(list, bm, stale)
     local slot = o.show_slot and list_ops.slot_of(list, bm.id) or nil
     if stale then
       text, hl = stale_icon, "HiraishinSignStale"
+    elseif list.camp == bm.id then
+      text, hl = M.camp_icon(), "HiraishinSignCamp"
     elseif slot then
       text, hl = slot, "HiraishinSignSlot"
     end

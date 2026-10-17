@@ -12,6 +12,9 @@ one key, the way Minato jumps to his marked kunai.
   remembers. A kunai that can't be found is marked stale, never dropped.
 - **Seals 1–9 for quick jumps.** `m3` seals a line, `g3` goes back to it, `mm`
   picks the next free number for you and `g<Space>` shows all nine.
+- **A camp for deep dives.** `m0` makes a line your camp; `g0` (or `<BS>`)
+  brings you back from any detour, and pressing it again at camp takes you
+  back out to where you were.
 - **Per project, per branch, or global.** One store per git root by default.
 - **Fits your setup.** Uses the picker you already have (snacks, telescope,
   fzf-lua, mini.pick), labels its which-key group and has a lualine component.
@@ -53,7 +56,9 @@ the picker follows your `vim.g.lazyvim_picker`.
    anywhere in the project, `g1` goes back to it and `<C-o>` returns you.
 4. `<leader>hf` finds kunai in a picker (with a preview, except in the
    `vim.ui.select` fallback).
-5. `<leader>he` opens the manager to rename, reorder or delete kunai in bulk.
+5. `m0` sets your **camp** before you start digging; `g0` or `<BS>` gets you
+   back to it, and again to return to the detour.
+6. `<leader>he` opens the manager to rename, reorder or delete kunai in bulk.
 
 Removed something by accident? `<leader>hu` brings it back, even after a
 restart: each project keeps its last 20 deletions (`undo_history`).
@@ -83,6 +88,9 @@ turned off (see [Configuration](#configuration)).
 | `mm` | `:Hiraishin seal` | Seal this line with the next free number |
 | `g1`…`g9` | `:Hiraishin jump {1-9}` | Go to that seal |
 | `g<Space>` | `:Hiraishin seals` | Seal menu: a digit goes there, `d` + digit clears it |
+| `m0` | `:Hiraishin camp` | Make this line your camp |
+| `g0` / `<BS>` | `:Hiraishin camp go` | Go to camp; at camp, back out to where you were |
+| | `:Hiraishin camp clear` | Remove the camp |
 | `<C-o>` | | Back to where you were before the jump |
 | `<leader>hj` / `<leader>hk` | `:Hiraishin next seal` / `prev seal` | Cycle through seals in order (1 → 9) |
 | | `:Hiraishin seal clear` | Remove the seal from this line |
@@ -91,7 +99,10 @@ The rule: anything with a number has no leader; everything else lives under
 `<leader>h`. None of these keys need a modifier or a dead key, so they work
 the same on any layout, on macOS and Linux. `m1`…`m9` take nothing from Vim
 (it can't set digit marks), `mm` gives up mark `m`, and `g1`…`g9` only
-shadow `g8`. Vim's other marks (`ma`, `'a`, …) keep working.
+shadow `g8`. `g0` replaces "start of the screen line" (only useful with
+`wrap`) and `<BS>` replaces "cursor left"; turn either off with
+`keymaps = { go_camp = false }` / `{ go_camp_alt = false }`. Vim's other marks
+(`ma`, `'a`, …) keep working.
 
 **Moving around**
 
@@ -144,6 +155,21 @@ Seals are quick jumps, like harpoon's slots, numbered 1–9 within each list:
   cursor isn't on a seal, they continue from the last seal you jumped to.
 - The sign column shows the seal number instead of the bookmark icon.
 
+### Camp
+
+Exploring code means detours: you follow a call, then another, then a test,
+and need to get back to where the real work is. Make that place your
+**camp** with `m0`:
+
+- `g0` (or `<BS>`) goes to camp from anywhere in the project.
+- At camp, the same key goes back out to where you were when you returned,
+  so one key bounces between camp and your latest detour.
+- There is one camp per list. `m0` somewhere else moves it, and the old spot
+  leaves no kunai behind unless you placed, named or noted one there.
+- Camp is not a seal: `mm` never picks it. It has its own sign (a house in
+  the Nerd Font style, `^` in ASCII, ⛺ in emoji), shows as `0` in the seal
+  menu, the statusline and the manager, and survives restarts.
+
 Jumps go to the jumplist, so `<C-o>` takes you back to where you were. They
 reuse a window that already shows the file, and the line you land on flashes
 briefly.
@@ -183,8 +209,8 @@ column header:
 - │ -          │ cmd/server/main.go:17 !     │
 ```
 
-You can change a seal (`1`–`9`, or `-` for none), a name (`-` for none) or a
-note. Move lines to reorder, delete lines to remove kunai, then `:w`. Problems
+You can change a seal (`1`–`9`, `0` for the camp, or `-` for none), a name
+(`-` for none) or a note. Move lines to reorder, delete lines to remove kunai, then `:w`. Problems
 such as two kunai with one seal, a duplicate name or an edited path appear as
 diagnostics, and nothing is applied until they are fixed. A `●` in the title
 means unsaved edits, and `!` marks a stale kunai. Without unsaved edits, the
@@ -242,7 +268,7 @@ precedence for the current session.
 
 Highlight groups, each linked to a default you can override:
 `HiraishinSign`, `HiraishinSignSlot`, `HiraishinSignStale`,
-`HiraishinSignGlobal`, `HiraishinSignRange`, `HiraishinLine`,
+`HiraishinSignGlobal`, `HiraishinSignRange`, `HiraishinSignCamp`, `HiraishinLine`,
 `HiraishinVirtText`, `HiraishinFlash`, `HiraishinStatus`,
 `HiraishinManagerSlot`, `HiraishinManagerPath`, `HiraishinManagerSep` and
 `HiraishinManagerHeader`.
@@ -317,6 +343,7 @@ require("hiraishin").setup({
     icon = false,                 -- a string overrides the style's icon
     stale_icon = false,
     global_icon = false,          -- sign of a global kunai inside a project
+    camp_icon = false,            -- sign of the camp
     show_slot = true,             -- the seal number replaces the icon
     numhl = false,
   },
@@ -360,7 +387,7 @@ require("hiraishin").setup({
 Keymap overrides: single actions (`toggle`, `add`, `note`, `delete`, `undo`,
 `next`, `prev`, `next_list`, `prev_list`, `next_seal`, `prev_seal`, `pick`,
 `pick_all`, `global`, `pick_global`, `quickfix`, `manager`, `list`,
-`seal_free`, `seals`) take a key or `false`. The nine-key groups `assign_slot` and `jump_slot` take a prefix or
+`seal_free`, `seals`, `camp`, `go_camp`, `go_camp_alt`) take a key or `false`. The nine-key groups `assign_slot` and `jump_slot` take a prefix or
 `false`:
 
 ```lua
@@ -382,7 +409,8 @@ h.remove(id_or_name)
 h.update(id_or_name, { name?, note?, slot? }) -- false clears a field
 h.seal(n)                                   -- seal the cursor line
 h.seal_free()                               --> bookmark, seal (the next free one)
-h.seals()                                   --> { { seal, name, file, here }, ... }
+h.seals()                                   --> { { seal, camp?, name, file, here }, ... } (0 = camp)
+h.set_camp() / h.go_camp() / h.camp() / h.clear_camp()
 h.slot_of(id_or_name)
 h.jump(name_or_seal, { split? })
 h.next({ count?, wrap?, scope? = "buffer"|"list"|"seal" })

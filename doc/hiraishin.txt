@@ -64,6 +64,9 @@ Set only when the key is free. Override per action with `keymaps`
   mm              seal the line with the next free number       `seal_free`
   g1..g9          go to that seal                               `jump_slot`
   g<Space>        seal menu                                     `seals`
+  m0              make this line the camp                       `camp`
+  g0  <BS>        go to camp; at camp, back out                 `go_camp`
+                                                                `go_camp_alt`
   <leader>hj      next seal (1 -> 9)                            `next_seal`
   <leader>hk      previous seal                                 `prev_seal`
   ]k  [k          next / previous kunai in the buffer           `next` `prev`
@@ -89,7 +92,8 @@ selected lines (|hiraishin-ranges|).
 Anything with a number has no leader; everything else is under <leader>h.
 None of the keys need a modifier or a dead key. m1..m9 take nothing from
 Vim (it can't set digit marks), mm gives up mark m and g1..g9 shadow only
-|g8|. After a jump, CTRL-O goes back.
+|g8|. m0 / g0 / <BS> are the camp (|hiraishin-camp|); g0 replaces |g0| and
+<BS> replaces cursor-left. After a jump, CTRL-O goes back.
 
 The nine-key groups take a prefix or false: >lua
     keymaps = { jump_slot = "<leader>", assign_slot = "<leader>h", seal_free = false }
@@ -113,9 +117,20 @@ All commands are subcommands of `:Hiraishin`, with completion.
 :Hiraishin delete [name]                                   *:Hiraishin-delete*
     Remove the kunai on the cursor line, or the one with that name.
 
+:Hiraishin camp [go|clear]                                   *:Hiraishin-camp*
+                                                                *hiraishin-camp*
+    The camp is the one place you keep coming back to while exploring:
+    without an argument, make the cursor line the camp (moving it if there
+    is one). "go" goes there; at camp, it goes back out to where you were
+    when you returned. "clear" removes it. There is one camp per list; it
+    is not a seal (mm never picks it) and shows as 0 in the seal menu, the
+    statusline and the manager. A kunai that only existed as camp goes away
+    when the camp moves (|:Hiraishin-undo| brings it back).
+
 :Hiraishin seals                                            *:Hiraishin-seals*
-    The seal menu: seals 1-9 with name, file, line and text. A digit goes
-    to that seal, d + digit (or dd on a line) clears it, q closes.
+    The seal menu: the camp (0) and seals 1-9 with name, file, line and
+    text. A digit goes there, d + digit (or dd on a line) clears it, q
+    closes.
 
 :Hiraishin note                                              *:Hiraishin-note*
     Edit the note of the line's kunai in a float. :w saves, q closes.
@@ -223,7 +238,8 @@ header: >
 "!" marks a stale kunai; "●" in the title means unapplied edits.
 Edit it like text, then |:w| applies everything at once:
 
-  - change the seal (1-9 or -), the name (- for none) or the note
+  - change the seal (1-9, 0 for the camp, or -), the name (- for none) or
+    the note
   - reorder lines to reorder the list (used by ]K [K and `sort = "manual"`)
   - delete lines to delete kunai (|:Hiraishin-undo| brings them back;
     `manager.confirm_delete` asks first)
@@ -330,6 +346,7 @@ Defaults: >lua
         icon = false,             -- a string overrides the style's icon
         stale_icon = false,
         global_icon = false,      -- sign of a global kunai in a project
+        camp_icon = false,        -- sign of the camp
         show_slot = true,
         numhl = false,
       },
@@ -389,7 +406,8 @@ Defaults: >lua
     h.at_cursor()
     h.seal(n)
     h.seal_free()                     --> bookmark, seal
-    h.seals()                         --> { { seal, name, file, here } }
+    h.seals()                         --> { { seal, camp?, name, file, here } }
+    h.set_camp() h.go_camp() h.camp() h.clear_camp()
     h.slot_of(id_or_name)
     h.jump(name_or_seal, { split? })
     h.next({ count?, wrap?, scope? = "buffer"|"list"|"seal" })
@@ -459,6 +477,7 @@ All link to standard groups and can be overridden:
   HiraishinSignStale     stale sign    -> DiagnosticWarn
   HiraishinSignGlobal    global kunai  -> DiagnosticOk
   HiraishinSignRange     range lines   -> HiraishinSign
+  HiraishinSignCamp      the camp      -> Special
   HiraishinLine          line          -> CursorLine
   HiraishinVirtText      name / note   -> Comment
   HiraishinFlash         jump flash    -> IncSearch

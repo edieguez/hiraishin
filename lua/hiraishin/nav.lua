@@ -284,6 +284,52 @@ function M.step_list(dir, opts)
   return M.jump(ctx, items[target].bm, list_name)
 end
 
+-- where you were when you last went to camp (the return trip)
+local away ---@type { abs: string, line: integer, col: integer }?
+
+---Go to camp, or back out to where you were when you're already there.
+---@return hiraishin.Bookmark? camp, string? err, "camp"|"back"|nil where
+function M.camp()
+  local ctx = scope.resolve(0)
+  local list, list_name = list_ops.active(store.get(ctx))
+  local bm = list.camp and list.bookmarks[list.camp]
+  local ui = require("hiraishin.ui")
+  if not bm then
+    return nil, "No camp yet · " .. ui.hint("camp", ":Hiraishin camp") .. " makes this line your camp"
+  end
+  local here = util.buf_path(0)
+  local cur = vim.api.nvim_win_get_cursor(0)
+  local line = tracker.live_line(ctx, bm)
+  local at_camp = here ~= nil and here == util.abspath(ctx.root, bm.file) and cur[1] == (line or bm.line)
+  if at_camp then
+    if not away then
+      return nil, "You are at camp"
+    end
+    local target = away
+    away = nil
+    vim.cmd("normal! m'")
+    local win, err = open(target.abs, nil, false)
+    if not win then
+      return nil, err
+    end
+    local bufnr = vim.api.nvim_win_get_buf(win)
+    local l = math.min(target.line, vim.api.nvim_buf_line_count(bufnr))
+    vim.api.nvim_win_set_cursor(win, { l, target.col })
+    if config.options.jump.flash then
+      M.flash(bufnr, l)
+    end
+    return bm, nil, "back"
+  end
+  if here then
+    away = { abs = here, line = cur[1], col = cur[2] }
+  end
+  local res, err = M.jump(ctx, bm, list_name)
+  if not res then
+    return nil, err
+  end
+  return res, nil, "camp"
+end
+
 -- seal of the last seal jump, to keep cycling from there when the cursor
 -- is not on a sealed kunai
 local last_seal ---@type integer?

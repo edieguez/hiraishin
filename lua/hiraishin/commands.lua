@@ -192,6 +192,29 @@ M.subcommands = {
       return { "1", "2", "3", "4", "5", "6", "7", "8", "9", "clear" }
     end,
   },
+  camp = {
+    -- :Hiraishin camp [go|clear]   make this line the camp / go there / remove it
+    run = function(args)
+      local h = require("hiraishin")
+      if args[1] == "go" then
+        local _, err = h.go_camp()
+        if err then
+          ui.info(err)
+        end
+      elseif args[1] == "clear" then
+        local old = h.clear_camp()
+        if not old then
+          return ui.info("No camp to remove")
+        end
+        ui.info(old.removed and ("Camp removed, and the kunai it made · " .. undo_hint()) or "Camp removed")
+      else
+        M.set_camp()
+      end
+    end,
+    complete = function()
+      return { "go", "clear" }
+    end,
+  },
   seals = {
     -- :Hiraishin seals   the seal menu
     run = function()
@@ -421,6 +444,22 @@ function M.seal(n)
     ui.info(string.format("Seal %d moved from %s to %s", n, describe(displaced), describe(bm)))
   else
     ui.info(string.format("Sealed as %d · %s jumps here", n, ui.hint("jump_slot_" .. n, ":Hiraishin jump " .. n)))
+  end
+end
+
+---Make the cursor line the camp and say so (m0).
+function M.set_camp()
+  local bm, err, previous, already = require("hiraishin").set_camp()
+  if not bm then
+    return ui.warn(err)
+  end
+  local go = ui.hint("go_camp", ":Hiraishin camp go")
+  if already then
+    ui.info("This is already your camp")
+  elseif previous then
+    ui.info(string.format("Camp moved here · was %s:%d", vim.fs.basename(previous.file), previous.line))
+  else
+    ui.info(string.format("Camp set · %s comes back here from anywhere", go))
   end
 end
 

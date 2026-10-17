@@ -27,6 +27,7 @@ M.defaults = {
     icon = false, -- a string overrides the style's icon
     stale_icon = false, -- a string overrides the style's stale icon
     global_icon = false, -- a string overrides the style's icon for global kunai
+    camp_icon = false, -- a string overrides the style's icon for the camp
     show_slot = true,
     numhl = false,
   },
@@ -163,6 +164,7 @@ local function validate(o)
   check("note_hover", o.note_hover, "boolean")
   check("global_kunai", o.global_kunai, "boolean")
   check("signs.global_icon", o.signs.global_icon, { "string", "boolean" })
+  check("signs.camp_icon", o.signs.camp_icon, { "string", "boolean" })
   check("jump.flash", o.jump.flash, "boolean")
   check("jump.flash_ms", o.jump.flash_ms, "number")
   check("signs.show_slot", o.signs.show_slot, "boolean")

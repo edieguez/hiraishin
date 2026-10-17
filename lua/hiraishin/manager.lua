@@ -48,7 +48,8 @@ function M.render_lines(ctx, list)
     local _, end_line = tracker.live_range(ctx, bm)
     local span = (not stale and end_line and line and end_line > line) and ("-" .. end_line) or ""
     local row = {
-      slot = list_ops.slot_of(list, bm.id) or "-",
+      -- the camp shows as seal 0 (unless it also holds a seal)
+      slot = list_ops.slot_of(list, bm.id) or (list.camp == bm.id and "0") or "-",
       name = bm.name or "-",
       path = string.format("%s:%d%s%s", bm.file, line or bm.line, span, stale and " !" or ""),
       note = bm.note and bm.note:gsub("\n", NEWLINE) or "",
@@ -95,7 +96,7 @@ function M.highlight(buf)
     for _, sep in ipairs(seps) do
       hl(sep[1], sep[2], "HiraishinManagerSep")
     end
-    local slot_s, slot_e = text:find("^%s*[1-9]")
+    local slot_s, slot_e = text:find("^%s*[0-9]")
     if slot_s and (not seps[1] or slot_e <= seps[1][1]) then
       hl(slot_e - 1, slot_e, "HiraishinManagerSlot")
     end
@@ -150,8 +151,8 @@ function M.parse_line(text, lnum)
   local slot = vim.trim(fields[1])
   if slot == "-" or slot == "" then
     slot = nil
-  elseif not slot:match("^[1-9]$") then
-    return nil, string.format("seal must be 1-9 or -, got '%s'", slot)
+  elseif not slot:match("^[0-9]$") then
+    return nil, string.format("seal must be 0 (camp), 1-9 or -, got '%s'", slot)
   end
   local name = vim.trim(fields[2])
   if name == "-" or name == "" then
@@ -337,6 +338,23 @@ function M.apply(state)
     end
   end
   local unsealed = {}
+  -- 0 in the seal column is the camp
+  local old_camp = list.camp
+  local camp_shown = old_camp and state.ids[old_camp] and not list_ops.slot_of(list, old_camp)
+  local new_camp = old_camp
+  if camp_shown then
+    new_camp = nil
+  end
+  for _, r in ipairs(rows) do
+    if r.slot == "0" then
+      new_camp = r.id
+      r.slot = nil
+    end
+  end
+  if old_camp and new_camp ~= old_camp and list.bookmarks[old_camp] then
+    table.insert(unsealed, { bm = list.bookmarks[old_camp], camp = true })
+  end
+  list.camp = new_camp
   for _, r in ipairs(rows) do
     local bm = list.bookmarks[r.id]
     local old_slot = list_ops.slot_of(list, r.id)
@@ -345,7 +363,7 @@ function M.apply(state)
     elseif old_slot then
       table.insert(unsealed, { bm = bm, slot = old_slot })
     end
-    if bm.name ~= r.name or bm.note ~= r.note or old_slot ~= r.slot then
+    if bm.name ~= r.name or bm.note ~= r.note or old_slot ~= r.slot or (r.id == new_camp) ~= (r.id == old_camp) then
       bm.name, bm.note, bm.updated_at = r.name, r.note, now
       if bm.name or bm.note then
         bm.seal_only = nil
@@ -376,7 +394,7 @@ end
 
 local HELP = {
   "Manager: seal │ name │ path:line │ note",
-  "  edit seal (1-9, -), name (-: none) or note",
+  "  edit seal (1-9, 0: camp, -), name (-: none) or note",
   "  reorder lines to reorder · delete lines to delete",
   "  :w apply · u undo edits · :Hiraishin undo after applying",
   "  <CR> jump · <Tab>/<S-Tab> other list · q close",

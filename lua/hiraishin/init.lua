@@ -438,8 +438,8 @@ function M._drop_unsealed(ctx, list, list_name, items, reason)
   local dropped, records = {}, {}
   for _, it in ipairs(items) do
     local bm = it.bm
-    if bm.seal_only and not bm.name and not bm.note and not list_ops.slot_of(list, bm.id) then
-      table.insert(records, { bm = bm, slot = it.slot, copy = snapshot(ctx, bm) })
+    if bm.seal_only and not bm.name and not bm.note and not list_ops.slot_of(list, bm.id) and list.camp ~= bm.id then
+      table.insert(records, { bm = bm, slot = it.slot, camp = it.camp, copy = snapshot(ctx, bm) })
     end
   end
   if #records == 0 then
@@ -450,6 +450,7 @@ function M._drop_unsealed(ctx, list, list_name, items, reason)
     vim.tbl_map(function(r)
       local item = history.item(ctx, list_name, list, r.bm)
       item.slot = item.slot or r.slot
+      item.camp = item.camp or r.camp
       return item
     end, records),
     reason
@@ -492,6 +493,80 @@ function M.seal(n)
     end
   end
   return M.update(bm.id, { slot = n })
+end
+
+---Make the cursor line the camp of the active list: the one place you keep
+---coming back to while exploring. Moving camp leaves no kunai behind unless
+---it was placed, named or noted on purpose.
+---@return hiraishin.Bookmark? camp, string? err, hiraishin.Bookmark? previous camp, boolean? already
+function M.set_camp()
+  ensure_setup()
+  local ctx, err = buf_ctx(0)
+  if not ctx then
+    return nil, err
+  end
+  local bm = M.at_cursor()
+  if not bm then
+    bm, err = M.add({ seal_only = true })
+    if not bm then
+      return nil, err
+    end
+  end
+  local data = store.get(ctx)
+  local list, list_name = list_ops.active(data)
+  local previous = list.camp and list.bookmarks[list.camp] or nil
+  if previous and previous.id == bm.id then
+    return snapshot(ctx, previous), nil, nil, true
+  end
+  local prev_copy = previous and snapshot(ctx, previous) or nil
+  list.camp = bm.id
+  if previous then
+    local dropped = M._drop_unsealed(ctx, list, list_name, { { bm = previous, camp = true } }, "camp")
+    if dropped[previous.id] then
+      prev_copy.removed = true
+    end
+  end
+  list.bookmarks[bm.id].updated_at = os.time()
+  changed(ctx)
+  events.emit("HiraishinUpdate", { bookmark = snapshot(ctx, list.bookmarks[bm.id]), list = list_name })
+  return snapshot(ctx, list.bookmarks[bm.id]), nil, prev_copy
+end
+
+---The camp of the active list.
+---@param opts? { bufnr?: integer }
+---@return hiraishin.Bookmark?
+function M.camp(opts)
+  ensure_setup()
+  local ctx = resolve(opts or {})
+  local list = list_ops.active(store.get(ctx))
+  local bm = list.camp and list.bookmarks[list.camp]
+  return bm and snapshot(ctx, bm) or nil
+end
+
+---Remove the camp (a kunai that only existed as camp goes too, undoably).
+---@param opts? { bufnr?: integer }
+---@return hiraishin.Bookmark? old camp
+function M.clear_camp(opts)
+  ensure_setup()
+  local ctx = resolve(opts or {})
+  local list, list_name = list_ops.active(store.get(ctx))
+  local bm = list.camp and list.bookmarks[list.camp]
+  if not bm then
+    return nil
+  end
+  local copy = snapshot(ctx, bm)
+  list.camp = nil
+  local dropped = M._drop_unsealed(ctx, list, list_name, { { bm = bm, camp = true } }, "camp")
+  copy.removed = dropped[bm.id] or nil
+  changed(ctx)
+  return copy
+end
+
+---Go to camp; at camp already, go back to where you were when you returned.
+---@return hiraishin.Bookmark? camp, string? err, "camp"|"back"|nil where
+function M.go_camp()
+  ensure_setup()
+  return require("hiraishin.nav").camp()
 end
 
 ---Seal the cursor line with the lowest free seal of the active list.
@@ -806,6 +881,9 @@ function M.undo()
       if item.slot and not list.slots[item.slot] then
         list.slots[item.slot] = bm.id
       end
+      if item.camp and not list.camp then
+        list.camp = bm.id
+      end
       restored = restored + 1
       events.emit("HiraishinAdd", { bookmark = vim.deepcopy(bm), list = item.list, reason = "undo" })
     end
@@ -980,7 +1058,8 @@ end
 
 ---Seals of the active list in the buffer's scope, in order, for statuslines.
 ---@param bufnr? integer
----@return { seal: integer, name?: string, file: string, here: boolean }[]
+---Seal 0 is the camp.
+---@return { seal: integer, camp?: boolean, name?: string, file: string, here: boolean }[]
 function M.seals(bufnr)
   if not did_setup then
     return {}
@@ -992,6 +1071,10 @@ function M.seals(bufnr)
   end
   local list = list_ops.active(store.get(ctx))
   local out = {}
+  local camp = list.camp and list.bookmarks[list.camp]
+  if camp then
+    table.insert(out, { seal = 0, camp = true, name = camp.name, file = camp.file, here = camp.file == ctx.file })
+  end
   for n = 1, 9 do
     local bm = list.bookmarks[list.slots[tostring(n)] or ""]
     if bm then

@@ -1,5 +1,5 @@
----The seal menu (g<Space>): seals 1-9 of the active list at a glance.
----A digit jumps to that seal, d + digit (or dd on a line) clears it.
+---The seal menu (g<Space>): the camp (0) and seals 1-9 of the active list at
+---a glance. A digit jumps there, d + digit (or dd on a line) clears it.
 local M = {}
 
 local ui = require("hiraishin.ui")
@@ -21,6 +21,9 @@ local function entries(origin)
     if e.slot then
       rows[e.slot] = e
     end
+    if e.camp then
+      rows[0] = e -- the camp is row 0
+    end
   end
   return rows, ctx
 end
@@ -29,7 +32,7 @@ local function render(menu)
   local rows, ctx = entries(menu.origin)
   menu.rows, menu.ctx = rows, ctx
   local wname, wloc = 1, 1
-  for n = 1, 9 do
+  for n = 0, 9 do
     local e = rows[n]
     if e then
       wname = math.max(wname, vim.fn.strdisplaywidth(e.bookmark.name or "—"))
@@ -37,7 +40,7 @@ local function render(menu)
     end
   end
   local lines, marks = {}, {}
-  for n = 1, 9 do
+  for n = 0, 9 do
     local e = rows[n]
     if e then
       local name = e.bookmark.name or "—"
@@ -55,7 +58,7 @@ local function render(menu)
       table.insert(lines, line)
       table.insert(marks, { n, #name, #loc, e.stale })
     else
-      table.insert(lines, string.format(" %d  ·", n))
+      table.insert(lines, n == 0 and " 0  · no camp (m0)" or string.format(" %d  ·", n))
       table.insert(marks, { n })
     end
   end
@@ -92,7 +95,7 @@ end
 local function go(menu, n)
   local e = menu.rows[n]
   if not e then
-    return ui.info(string.format("Seal %d is empty", n))
+    return ui.info(n == 0 and "No camp yet" or string.format("Seal %d is empty", n))
   end
   close(menu)
   local list = require("hiraishin.store").get(menu.ctx).lists[e.list]
@@ -109,6 +112,11 @@ local function clear(menu, n)
   local e = menu.rows[n]
   if not e then
     return
+  end
+  if n == 0 then
+    local old = require("hiraishin").clear_camp({ bufnr = menu.origin })
+    ui.info(old and old.removed and "Camp removed, and the kunai it made" or "Camp removed")
+    return render(menu)
   end
   local updated = require("hiraishin").update(e.id, { slot = false }, { bufnr = menu.origin })
   if updated and updated.removed then
@@ -135,15 +143,15 @@ function M.open()
   local list = require("hiraishin.store").get(require("hiraishin.scope").resolve(origin)).active_list
   local win = vim.api.nvim_open_win(buf, true, {
     relative = "editor",
-    row = math.max(0, math.floor((vim.o.lines - 11) / 2) - 1),
+    row = math.max(0, math.floor((vim.o.lines - 12) / 2) - 1),
     col = math.floor((vim.o.columns - width) / 2),
     width = width,
-    height = 9,
+    height = 10,
     style = "minimal",
     border = require("hiraishin.config").options.manager.border,
     title = " Seals · " .. list .. " ",
     title_pos = "center",
-    footer = " 1-9 go · d1-9 clear · q close ",
+    footer = " 0-9 go · d0-9 clear · q close ",
     footer_pos = "center",
   })
   vim.wo[win].cursorline = true
@@ -154,19 +162,19 @@ function M.open()
   local function map(lhs, fn, desc)
     vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true, desc = "hiraishin: " .. desc })
   end
-  for n = 1, 9 do
+  for n = 0, 9 do
     map(tostring(n), function()
       go(menu, n)
-    end, "Go to seal " .. n)
+    end, n == 0 and "Go to camp" or ("Go to seal " .. n))
     map("d" .. n, function()
       clear(menu, n)
-    end, "Clear seal " .. n)
+    end, n == 0 and "Remove the camp" or ("Clear seal " .. n))
   end
   map("<CR>", function()
-    go(menu, vim.api.nvim_win_get_cursor(menu.win)[1])
+    go(menu, vim.api.nvim_win_get_cursor(menu.win)[1] - 1)
   end, "Go to the seal on this line")
   map("dd", function()
-    clear(menu, vim.api.nvim_win_get_cursor(menu.win)[1])
+    clear(menu, vim.api.nvim_win_get_cursor(menu.win)[1] - 1)
   end, "Clear the seal on this line")
   for _, lhs in ipairs({ "q", "<Esc>" }) do
     map(lhs, function()
