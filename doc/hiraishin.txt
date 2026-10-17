@@ -76,6 +76,9 @@ Set only when the key is free. Override per action with `keymaps`
   <leader>hl      switch list                                   `list`
   <leader>hu      undo the last deletion                        `undo`
 
+In Visual mode <leader>hh and <leader>ha place a range kunai over the
+selected lines (|hiraishin-ranges|).
+
 `]m` and `[m` take a count. They replace Vim's "next method start" motions;
 `keymaps = { next = false, prev = false }` keeps those.
 
@@ -88,13 +91,13 @@ The nine-key groups take a prefix or false: >lua
                                                                   *:Hiraishin*
 All commands are subcommands of `:Hiraishin`, with completion.
 
-:Hiraishin toggle                                          *:Hiraishin-toggle*
+:[range]Hiraishin toggle                                   *:Hiraishin-toggle*
     Place a kunai on the cursor line, or remove the one there. The message
     says how to undo a removal (|hiraishin-confirm_remove_named| asks first
-    instead).
+    instead). With a range of lines, places a range kunai.
 
-:Hiraishin add [name]                                         *:Hiraishin-add*
-:Hiraishin! add
+:[range]Hiraishin add [name]                                  *:Hiraishin-add*
+:[range]Hiraishin! add
     Place a kunai, named if given. With ! prompt for the name, suggesting
     the enclosing function. On a line with a kunai, renames it.
 
@@ -273,6 +276,14 @@ When a file changed outside Neovim, kunai are found again from the line
 text they remember and its neighbours: near the old line, then in the whole
 file, then by a fuzzy match for slightly edited lines (`anchor`).
 
+                                                            *hiraishin-ranges*
+A range kunai marks a block of lines: select them and press <leader>hh (or
+`:'<,'>Hiraishin toggle`). The first line carries the sign, the rest a thin
+line (`HiraishinSignRange`). Edits inside the block grow or shrink it; when
+a file changed outside Neovim the block is found again by its first line
+and keeps its length. Jumps land on the first line and flash the whole
+block; the picker, the manager and the quickfix list show `file:12-18`.
+
 Renames are followed for |:saveas|, |:file|, oil.nvim, mini.files, neo-tree
 and nvim-tree. Others can call `require("hiraishin").rename(from, to)`.
 
@@ -354,7 +365,7 @@ Defaults: >lua
 >lua
     local h = require("hiraishin")
     h.toggle({ bufnr?, line? })       --> bookmark, "added"|"removed"
-    h.add({ name?, note?, bufnr?, line? })
+    h.add({ name?, note?, bufnr?, line?, end_line? })  -- end_line: range
     h.remove(id_or_name)
     h.update(id_or_name, { name?, note?, slot? })  -- false clears
     h.get(id_or_name)
@@ -427,6 +438,7 @@ All link to standard groups and can be overridden:
   HiraishinSignSlot      sealed sign   -> DiagnosticHint
   HiraishinSignStale     stale sign    -> DiagnosticWarn
   HiraishinSignGlobal    global kunai  -> DiagnosticOk
+  HiraishinSignRange     range lines   -> HiraishinSign
   HiraishinLine          line          -> CursorLine
   HiraishinVirtText      name / note   -> Comment
   HiraishinFlash         jump flash    -> IncSearch

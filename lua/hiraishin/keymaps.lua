@@ -22,8 +22,19 @@ end
 
 ---Single-key actions. `lhs` is the default; override with keymaps = { action = "<lhs>" | false }.
 M.defaults = {
-  toggle = { lhs = "<leader>hh", desc = "Toggle kunai", rhs = "<cmd>Hiraishin toggle<cr>" },
-  add = { lhs = "<leader>ha", desc = "Place / rename named kunai", rhs = "<cmd>Hiraishin! add<cr>" },
+  toggle = {
+    lhs = "<leader>hh",
+    desc = "Toggle kunai",
+    rhs = "<cmd>Hiraishin toggle<cr>",
+    -- in visual mode: a range kunai over the selected lines
+    xrhs = ":Hiraishin toggle<cr>",
+  },
+  add = {
+    lhs = "<leader>ha",
+    desc = "Place / rename named kunai",
+    rhs = "<cmd>Hiraishin! add<cr>",
+    xrhs = ":Hiraishin! add<cr>",
+  },
   note = { lhs = "<leader>hn", desc = "Edit kunai note", rhs = "<cmd>Hiraishin note<cr>" },
   delete = { lhs = "<leader>hd", desc = "Remove kunai on line", rhs = "<cmd>Hiraishin delete<cr>" },
   pick = { lhs = "<leader>hf", desc = "Find kunai", rhs = "<cmd>Hiraishin pick<cr>" },
@@ -115,23 +126,24 @@ function M.lhs_of(action)
 end
 
 local function clear()
-  for _, lhs in ipairs(applied) do
-    local map = vim.fn.maparg(lhs, "n", false, true)
+  for _, a in ipairs(applied) do
+    local map = vim.fn.maparg(a.lhs, a.mode, false, true)
     -- only remove mappings that are still ours
     if map.desc and vim.startswith(map.desc, DESC_PREFIX) then
-      pcall(vim.keymap.del, "n", lhs)
+      pcall(vim.keymap.del, a.mode, a.lhs)
     end
   end
   applied = {}
   by_action = {}
 end
 
-local function set(lhs, rhs, desc, forced, action)
+local function set(lhs, rhs, desc, forced, action, mode)
+  mode = mode or "n"
   -- user overrides always win; defaults never clobber an existing mapping
-  if forced or vim.fn.maparg(lhs, "n") == "" then
-    vim.keymap.set("n", lhs, rhs, { desc = DESC_PREFIX .. desc, silent = true })
-    table.insert(applied, vim.fn.maparg(lhs, "n", false, true).lhs or lhs)
-    if action then
+  if forced or vim.fn.maparg(lhs, mode) == "" then
+    vim.keymap.set(mode, lhs, rhs, { desc = DESC_PREFIX .. desc, silent = true })
+    table.insert(applied, { mode = mode, lhs = vim.fn.maparg(lhs, mode, false, true).lhs or lhs })
+    if action and mode == "n" then
       by_action[action] = lhs
     end
   end
@@ -151,6 +163,9 @@ function M.setup()
     end
     if lhs then
       set(lhs, def.rhs, def.desc, overrides[action] ~= nil, action)
+      if def.xrhs then
+        set(lhs, def.xrhs, def.desc .. " (range)", overrides[action] ~= nil, action, "x")
+      end
     end
   end
   for group, def in pairs(M.groups) do

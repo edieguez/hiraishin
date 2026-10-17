@@ -8,6 +8,7 @@ vim.api.nvim_create_user_command("Hiraishin", function(cmd)
 end, {
   nargs = "*",
   bang = true,
+  range = true,
   desc = "hiraishin.nvim bookmarks",
   complete = function(arg_lead, cmd_line, cursor_pos)
     return require("hiraishin.commands").complete(arg_lead, cmd_line, cursor_pos)

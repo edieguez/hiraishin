@@ -66,6 +66,7 @@ turned off (see [Configuration](#configuration)).
 | `<leader>ha` | `:Hiraishin! add` | Place or rename a named kunai |
 | `<leader>hn` | `:Hiraishin note` | Edit the kunai's note in a float (`:w` saves, `q` closes) |
 | `<leader>hd` | `:Hiraishin delete [name]` | Remove the kunai on this line, or one by name |
+| `<leader>hh` (Visual) | `:'<,'>Hiraishin toggle` | Place a **range** kunai over the selected lines |
 | `<leader>hu` | `:Hiraishin undo` | Bring back the last removal |
 
 **Seals: quick jumps**
@@ -215,7 +216,7 @@ precedence for the current session.
 
 Highlight groups, each linked to a default you can override:
 `HiraishinSign`, `HiraishinSignSlot`, `HiraishinSignStale`,
-`HiraishinSignGlobal`, `HiraishinLine`,
+`HiraishinSignGlobal`, `HiraishinSignRange`, `HiraishinLine`,
 `HiraishinVirtText`, `HiraishinFlash`, `HiraishinStatus`,
 `HiraishinManagerSlot`, `HiraishinManagerPath`, `HiraishinManagerSep` and
 `HiraishinManagerHeader`.
@@ -242,6 +243,9 @@ reports stale kunai.
 
 - While a file is open, kunai follow your edits, and their new positions are
   saved when you write the file. `:e!` brings back the saved positions.
+- A **range kunai** (select lines, `<leader>hh`) grows and shrinks with edits
+  inside it, keeps its length when found again, and jumps flash the whole
+  block. The picker, manager and quickfix show `file:12-18`.
 - Deleting a kunai's line makes it **stale**. `u` brings it back, and so does
   typing or pasting that line again before the next write.
 - When a file changes outside Neovim (`git pull`, a formatter), each kunai is
@@ -344,7 +348,7 @@ keymaps = {
 ```lua
 local h = require("hiraishin")
 h.toggle()                                  --> bookmark, "added"|"removed"
-h.add({ name?, note?, bufnr?, line? })      --> bookmark | nil, err
+h.add({ name?, note?, bufnr?, line?, end_line? }) --> bookmark | nil, err
 h.remove(id_or_name)
 h.update(id_or_name, { name?, note?, slot? }) -- false clears a field
 h.seal(n)                                   -- seal the cursor line

@@ -30,6 +30,14 @@ local function step_scope(arg)
   return (arg == "list" or arg == "seal") and arg or "buffer"
 end
 
+---Lines of a :'<,'>Hiraishin range, nil without a multi-line range.
+---@return { line: integer, end_line: integer }?
+local function range_of(cmd)
+  if cmd and cmd.range == 2 and cmd.line2 > cmd.line1 then
+    return { line = cmd.line1, end_line = cmd.line2 }
+  end
+end
+
 local function in_file_count()
   return #require("hiraishin").list({ bufnr = 0, include_stale = false })
 end
@@ -37,30 +45,34 @@ end
 ---@type table<string, { run: fun(args: string[], bang: boolean), complete?: fun(): string[] }>
 M.subcommands = {
   toggle = {
-    run = function()
+    run = function(_, _, cmd)
       local h = require("hiraishin")
-      local current = h.at_cursor()
+      local range = range_of(cmd)
+      local current = h.at_cursor(range and { line = range.line } or nil)
       if current and (current.name or current.note) and require("hiraishin.config").options.confirm_remove_named then
         if vim.fn.confirm("Remove kunai " .. describe(current) .. "?", "&Yes\n&No", 2) ~= 1 then
           return
         end
       end
-      local bm, action, err = h.toggle()
+      local bm, action, err = h.toggle(range)
       if err then
         return ui.warn(err)
       end
       if action == "removed" then
         ui.info(string.format("Removed kunai %s · %s", describe(bm), undo_hint()))
+      elseif bm.end_line then
+        ui.info(string.format("Kunai placed on lines %d-%d · %d in this file", bm.line, bm.end_line, in_file_count()))
       else
         ui.info(string.format("Kunai placed · %d in this file", in_file_count()))
       end
     end,
   },
   add = {
-    run = function(args, bang)
+    run = function(args, bang, cmd)
       local h = require("hiraishin")
+      local range = range_of(cmd) or {}
       local function add(name)
-        local bm, status = h.add({ name = name })
+        local bm, status = h.add({ name = name, line = range.line, end_line = range.end_line })
         if not bm then
           return ui.warn(status)
         end
@@ -79,7 +91,7 @@ M.subcommands = {
       if #args > 0 then
         add(table.concat(args, " "))
       elseif bang then
-        local current = h.at_cursor()
+        local current = h.at_cursor(range.line and { line = range.line } or nil)
         local default = current and current.name or require("hiraishin.names").suggest() or ""
         vim.ui.input({ prompt = "Kunai name: ", default = default }, function(input)
           if input ~= nil then
@@ -439,7 +451,7 @@ function M.choose_list(on_done)
   end)
 end
 
----@param cmd { fargs: string[], bang: boolean }
+---@param cmd { fargs: string[], bang: boolean, range?: integer, line1?: integer, line2?: integer }
 function M.run(cmd)
   local name = cmd.fargs[1]
   if not name then
@@ -450,7 +462,7 @@ function M.run(cmd)
   if not sub then
     return ui.warn("Unknown subcommand: " .. name)
   end
-  sub.run(vim.list_slice(cmd.fargs, 2), cmd.bang)
+  sub.run(vim.list_slice(cmd.fargs, 2), cmd.bang, cmd)
 end
 
 ---@return string[]

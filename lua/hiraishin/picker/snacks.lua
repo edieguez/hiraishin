@@ -15,6 +15,7 @@ local function to_items(entries)
       text = e.ordinal,
       file = e.abs,
       pos = { e.line, e.col },
+      end_pos = e.end_line and { e.end_line, 0 } or nil,
       entry = e,
     }
   end
@@ -37,7 +38,7 @@ local function format(e)
     table.insert(ret, { "(" .. e.list .. ")  ", "Special" })
   end
   table.insert(ret, { e.file, "Directory" })
-  table.insert(ret, { ":" .. e.line, "LineNr" })
+  table.insert(ret, { ":" .. e.line .. (e.end_line and ("-" .. e.end_line) or ""), "LineNr" })
   table.insert(ret, { "  " })
   if e.stale then
     table.insert(ret, { "(stale)", "HiraishinSignStale" })

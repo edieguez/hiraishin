@@ -20,6 +20,9 @@
   kunai in the global store from any scope; it is drawn (globe sign),
   tracked and saved in project buffers; `pick global` / `<leader>hG` and
   `manager global` reach them anywhere; undo covers them (`global_kunai`)
+- Range kunai: `:'<,'>Hiraishin toggle|add` or `<leader>hh` / `<leader>ha`
+  in Visual mode mark a block of lines; it follows edits, keeps its length
+  when re-anchored, and jumps flash the block (`end_line` in the API)
 
 ### UX and UI pass
 - Seals are quick jumps: sealing a bare line makes a kunai just for the seal,

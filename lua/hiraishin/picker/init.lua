@@ -79,7 +79,7 @@ local function label(e, show_list)
   if show_list then
     table.insert(parts, "(" .. e.list .. ")")
   end
-  table.insert(parts, e.file .. ":" .. e.line)
+  table.insert(parts, e.file .. ":" .. e.line .. (e.end_line and ("-" .. e.end_line) or ""))
   table.insert(parts, e.stale and "(stale)" or vim.trim(e.text))
   if o.picker.show_notes and e.bookmark.note then
     table.insert(parts, (o.virt_text.note_icon or "✎") .. " " .. e.bookmark.note:gsub("\n", " ⏎ "))
@@ -140,6 +140,10 @@ function M.entries(opts)
         local line, invalid = tracker.live_line(ctx, bm)
         copy.line = line or bm.line
         copy.stale = bm.stale or invalid
+        if bm.end_line and line then
+          local _, end_line = tracker.live_range(ctx, bm)
+          copy.end_line = end_line > line and end_line or nil
+        end
         local slot = list_ops.slot_of(list, bm.id)
         local abs = util.abspath(ctx.root, bm.file)
         local e = {
@@ -150,6 +154,7 @@ function M.entries(opts)
           file = bm.file,
           abs = abs,
           line = copy.line,
+          end_line = copy.end_line,
           col = bm.col or 0,
           text = file_lines(abs, copy.line, cache) or "",
           stale = copy.stale,
@@ -266,6 +271,7 @@ function M.actions.quickfix(entries, opts)
     table.insert(items, {
       filename = e.abs,
       lnum = e.line,
+      end_lnum = e.end_line,
       col = e.col + 1,
       text = prefix .. (e.stale and "(stale) " or "") .. vim.trim(e.text),
       type = e.stale and "W" or nil,

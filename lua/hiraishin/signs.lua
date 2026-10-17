@@ -12,6 +12,8 @@ M.stale_ns = vim.api.nvim_create_namespace("hiraishin_stale")
 M.cursor_ns = vim.api.nvim_create_namespace("hiraishin_cursor")
 -- global kunai drawn in project buffers (hiraishin.global_layer)
 M.global_ns = vim.api.nvim_create_namespace("hiraishin_global")
+-- the continuation of range kunai in the sign column
+M.range_ns = vim.api.nvim_create_namespace("hiraishin_range")
 -- the brief highlight after a jump
 M.flash_ns = vim.api.nvim_create_namespace("hiraishin_flash")
 
@@ -46,6 +48,7 @@ function M.setup_highlights()
     HiraishinSignSlot = "DiagnosticHint",
     HiraishinSignStale = "DiagnosticWarn",
     HiraishinSignGlobal = "DiagnosticOk",
+    HiraishinSignRange = "HiraishinSign",
     HiraishinLine = "CursorLine",
     HiraishinVirtText = "Comment",
     HiraishinManagerSlot = "HiraishinSignSlot",

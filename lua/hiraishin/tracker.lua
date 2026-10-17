@@ -55,13 +55,23 @@ local function lookup(data, id)
   end
 end
 
----@return integer? row0, boolean invalid
+---@return integer? row0, boolean invalid, integer? end_row0 (range kunai)
 local function mark_pos(bufnr, mark_id)
   local m = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, mark_id, { details = true })
   if not m or #m == 0 then
     return nil, true
   end
-  return m[1], m[3] and m[3].invalid or false
+  return m[1], m[3] and m[3].invalid or false, m[3] and m[3].end_row or nil
+end
+
+---Extmark range fields for a range kunai starting at `row` (0-based).
+local function range_opts(bufnr, row, end_row)
+  local last = vim.api.nvim_buf_line_count(bufnr) - 1
+  end_row = math.min(end_row, last)
+  if end_row <= row then
+    return {}
+  end
+  return { end_row = end_row, end_col = 0, end_right_gravity = false }
 end
 
 local function mark_opts(data, list_name, list, bm)
@@ -99,7 +109,7 @@ function M.render(bufnr)
   end
   for id, mark_id in pairs(t.marks) do
     local name, list, bm = lookup(data, id)
-    local row, invalid = mark_pos(bufnr, mark_id)
+    local row, invalid, end_row = mark_pos(bufnr, mark_id)
     if not bm or not row then
       pcall(vim.api.nvim_buf_del_extmark, bufnr, ns, mark_id)
       t.marks[id] = nil
@@ -112,12 +122,14 @@ function M.render(bufnr)
       local sig = signature(opts)
       if t.looks[id] ~= sig then
         vim.api.nvim_buf_del_extmark(bufnr, ns, mark_id)
-        t.marks[id] = vim.api.nvim_buf_set_extmark(bufnr, ns, row, 0, opts)
+        local placed = end_row and vim.tbl_extend("force", opts, range_opts(bufnr, row, end_row)) or opts
+        t.marks[id] = vim.api.nvim_buf_set_extmark(bufnr, ns, row, 0, placed)
         t.looks[id] = sig
       end
     end
   end
   M.cursor_virt(bufnr)
+  M.render_ranges(bufnr)
   -- stale kunai: sign only, at the last known line
   vim.api.nvim_buf_clear_namespace(bufnr, signs.stale_ns, 0, -1)
   local active = data.lists[data.active_list]
@@ -141,8 +153,11 @@ local function place(bufnr, data, e)
   end
   local row = math.min(e.bm.line, vim.api.nvim_buf_line_count(bufnr)) - 1
   local opts = mark_opts(data, e.name, e.list, e.bm)
-  t.marks[e.bm.id] = vim.api.nvim_buf_set_extmark(bufnr, ns, row, 0, opts)
   t.looks[e.bm.id] = signature(opts)
+  if e.bm.end_line then
+    opts = vim.tbl_extend("force", opts, range_opts(bufnr, row, row + e.bm.end_line - e.bm.line))
+  end
+  t.marks[e.bm.id] = vim.api.nvim_buf_set_extmark(bufnr, ns, row, 0, opts)
 end
 
 ---Re-anchor the file's kunai against the buffer content and start tracking.
@@ -173,6 +188,10 @@ function M.attach(bufnr)
     if line then
       if method ~= "same" or bm.stale then
         local from = bm.line
+        if bm.end_line then
+          bm.end_line = math.min(#lines, line + bm.end_line - bm.line)
+          bm.end_line = bm.end_line > line and bm.end_line or nil
+        end
         bm.line = line
         bm.anchor = anchor.capture(lines, line)
         bm.stale = false
@@ -207,6 +226,7 @@ function M.detach(bufnr)
     vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
     vim.api.nvim_buf_clear_namespace(bufnr, signs.stale_ns, 0, -1)
     vim.api.nvim_buf_clear_namespace(bufnr, signs.cursor_ns, 0, -1)
+    vim.api.nvim_buf_clear_namespace(bufnr, signs.range_ns, 0, -1)
   end
   require("hiraishin.global_layer").detach(bufnr)
   tracked[bufnr] = nil
@@ -259,6 +279,15 @@ function M.sync(bufnr)
       else
         local line = row + 1
         local fresh = anchor.capture(lines, line)
+        if bm.end_line then
+          local _, _, end_row = mark_pos(bufnr, mark_id)
+          local end_line = end_row and end_row + 1 or nil
+          end_line = end_line and end_line > line and end_line or nil
+          if end_line ~= bm.end_line then
+            bm.end_line = end_line
+            changed = true
+          end
+        end
         if line ~= bm.line or bm.stale or not vim.deep_equal(fresh, bm.anchor) then
           local from = bm.line
           bm.line, bm.anchor, bm.stale = line, fresh, false
@@ -349,6 +378,54 @@ function M.retarget(bufnr)
   end
   t.ctx = ctx
   M.reconcile(ctx)
+end
+
+---Live first and last line of a range kunai (last = first for plain kunai).
+---@param ctx hiraishin.Context
+---@param bm hiraishin.Bookmark
+---@return integer? line, integer? end_line
+function M.live_range(ctx, bm)
+  local line = M.live_line(ctx, bm)
+  if not line then
+    return nil, nil
+  end
+  for bufnr, t in pairs(tracked) do
+    if t.ctx.store == ctx.store and t.ctx.file == bm.file and t.marks[bm.id] then
+      local _, _, end_row = mark_pos(bufnr, t.marks[bm.id])
+      return line, end_row and math.max(line, end_row + 1) or line
+    end
+  end
+  return line, bm.end_line and math.max(line, line + bm.end_line - bm.line) or line
+end
+
+---Draw the continuation of range kunai (active list) in the sign column.
+---@param bufnr integer
+function M.render_ranges(bufnr)
+  bufnr = real(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  vim.api.nvim_buf_clear_namespace(bufnr, signs.range_ns, 0, -1)
+  local t = tracked[bufnr]
+  if not t or not config.options.signs.enabled then
+    return
+  end
+  local data = store.get(t.ctx)
+  local active = data.lists[data.active_list]
+  for id, mark_id in pairs(t.marks) do
+    if active and active.bookmarks[id] and active.bookmarks[id].end_line then
+      local row, invalid, end_row = mark_pos(bufnr, mark_id)
+      if row and not invalid and end_row and end_row > row then
+        for r = row + 1, math.min(end_row, row + 500) do
+          vim.api.nvim_buf_set_extmark(bufnr, signs.range_ns, r, 0, {
+            sign_text = r == end_row and "└" or "│",
+            sign_hl_group = "HiraishinSignRange",
+            priority = config.options.signs.priority,
+          })
+        end
+      end
+    end
+  end
 end
 
 ---Live 1-based line of a kunai: nil when its line was deleted (or it is stale).

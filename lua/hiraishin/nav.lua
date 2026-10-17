@@ -114,7 +114,8 @@ function M.jump(ctx, bm, list_name, opts)
     vim.cmd("normal! zz")
   end
   if j.flash then
-    M.flash(bufnr, line)
+    local _, end_line = tracker.live_range(live_ctx, bm)
+    M.flash(bufnr, line, not stale and end_line or nil)
   end
   if stale then
     util.notify(
@@ -135,11 +136,13 @@ local flash_timer ---@type uv.uv_timer_t?
 ---Briefly highlight a line (where a jump landed).
 ---@param bufnr integer
 ---@param line integer 1-based
-function M.flash(bufnr, line)
+---@param end_line? integer last line of a range kunai
+function M.flash(bufnr, line, end_line)
   local ns = require("hiraishin.signs").flash_ns
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+  end_line = math.min(math.max(end_line or line, line), vim.api.nvim_buf_line_count(bufnr))
   vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
-    end_row = line,
+    end_row = end_line,
     end_col = 0,
     hl_group = "HiraishinFlash",
     hl_eol = true,

@@ -98,6 +98,14 @@ function M.setup(opts)
       end
     end,
   })
+  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+    group = group,
+    callback = function(ev)
+      if tracker.is_tracked(ev.buf) then
+        tracker.render_ranges(ev.buf)
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd("CursorHold", {
     group = group,
     callback = function(ev)
@@ -238,6 +246,10 @@ function M.add(opts)
   if line < 1 or line > vim.api.nvim_buf_line_count(bufnr) then
     return nil, "Line out of range"
   end
+  local end_line = opts.end_line
+  if end_line ~= nil and (end_line <= line or end_line > vim.api.nvim_buf_line_count(bufnr)) then
+    return nil, "The range must end after its first line, inside the file"
+  end
   local data = store.get(ctx)
   local list, list_name = list_ops.active(data)
   local name, note = util.trim(opts.name), util.trim(opts.note)
@@ -248,12 +260,17 @@ function M.add(opts)
   end
 
   if existing then
-    if name or note or existing.seal_only then
+    if name or note or existing.seal_only or end_line then
       existing.name = name or existing.name
       existing.note = note or existing.note
       existing.seal_only = nil -- placed on purpose now: it outlives its seal
       existing.updated_at = os.time()
-      changed(ctx)
+      if end_line then
+        existing.end_line = end_line
+        changed(ctx, { [existing.id] = true })
+      else
+        changed(ctx)
+      end
       events.emit("HiraishinUpdate", { bookmark = snapshot(ctx, existing), list = list_name })
     end
     return snapshot(ctx, existing), "exists"
@@ -268,6 +285,7 @@ function M.add(opts)
     name = name,
     note = note,
     anchor = util.anchor(bufnr, line),
+    end_line = end_line, -- range kunai: last line of the range
     stale = false,
     -- created by sealing a bare line: it goes away when it loses its seal
     seal_only = opts.seal_only or nil,
@@ -302,7 +320,7 @@ function M.remove(key, opts)
 end
 
 ---Add a bookmark on the line, or remove the one already there.
----@param opts? { bufnr?: integer, line?: integer }
+---@param opts? { bufnr?: integer, line?: integer, end_line?: integer, global?: boolean }
 ---@return hiraishin.Bookmark? bookmark, "added"|"removed"|nil action, string? err
 function M.toggle(opts)
   ensure_setup()
@@ -318,7 +336,8 @@ function M.toggle(opts)
     local removed = M.remove(existing.id, { bufnr = bufnr, reason = "toggle", global = opts.global })
     return removed, "removed"
   end
-  local bm, add_err = M.add({ bufnr = bufnr, line = line, col = opts.col, global = opts.global })
+  local bm, add_err =
+    M.add({ bufnr = bufnr, line = line, end_line = opts.end_line, col = opts.col, global = opts.global })
   return bm, bm and "added" or nil, add_err
 end
 
@@ -603,14 +622,15 @@ end
 
 ---Bookmark on the cursor line of the current buffer, if any.
 ---@return hiraishin.Bookmark?
-function M.at_cursor()
+function M.at_cursor(opts)
   ensure_setup()
+  opts = opts or {}
   local ctx = buf_ctx(0)
   if not ctx then
     return nil
   end
   local list = list_ops.active(store.get(ctx))
-  local bm = list_ops.find_at(list, ctx.file, vim.api.nvim_win_get_cursor(0)[1], line_fn(ctx))
+  local bm = list_ops.find_at(list, ctx.file, opts.line or vim.api.nvim_win_get_cursor(0)[1], line_fn(ctx))
   return bm and snapshot(ctx, bm) or nil
 end
 

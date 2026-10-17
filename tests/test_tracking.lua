@@ -377,4 +377,86 @@ T["relocate and prune"][":Hiraishin prune removes stale kunai and can be undone"
   eq(#child.lua_get([[require("hiraishin").list()]]), 2)
 end
 
+T["ranges"] = MiniTest.new_set()
+
+local function range_signs()
+  return child.lua_get([[(function()
+    local out = {}
+    for _, m in ipairs(vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").range_ns, 0, -1, { details = true })) do
+      out[tostring(m[2] + 1)] = vim.trim(m[4].sign_text)
+    end
+    return out
+  end)()]])
+end
+
+T["ranges"][":'<,'>Hiraishin toggle places a range kunai"] = function()
+  main_lua(1)
+  child.cmd("2,4Hiraishin toggle")
+  eq(child.lua_get([[require("hiraishin.ui").last()]]), "Kunai placed on lines 2-4 · 1 in this file")
+  eq(child.signs(), { ["2"] = "⚡" })
+  eq(range_signs(), { ["3"] = "│", ["4"] = "└" })
+  local bm = child.lua_get([[require("hiraishin").list()[1] ]])
+  eq({ bm.line, bm.end_line }, { 2, 4 })
+  -- toggling on its first line removes it
+  child.cmd("2,4Hiraishin toggle")
+  eq(child.signs(), {})
+  eq(range_signs(), {})
+end
+
+T["ranges"]["follow edits inside and above, saved on write"] = function()
+  main_lua(1)
+  child.lua([[require("hiraishin").add({ line = 3, end_line = 5, name = "body" })]])
+  child.api.nvim_buf_set_lines(0, 3, 3, false, { "  -- inside" }) -- between 4 and 5
+  lines_above(1)
+  eq(range_signs(), { ["5"] = "│", ["6"] = "│", ["7"] = "└" })
+  child.cmd("write")
+  local bm = stored("body")
+  eq({ bm.line, bm.end_line }, { 4, 7 })
+end
+
+T["ranges"]["keep their length when found again after outside changes"] = function()
+  main_lua(1)
+  child.lua([[require("hiraishin").add({ line = 3, end_line = 5, name = "body" })]])
+  child.cmd("write")
+  child.cmd("bwipeout!")
+  child.lua(
+    [[local p = T.proj_a .. "/src/main.lua"
+    local l = vim.fn.readfile(p); table.insert(l, 1, "-- new"); table.insert(l, 1, "-- new"); vim.fn.writefile(l, p)]]
+  )
+  main_lua(1)
+  eq(range_signs(), { ["6"] = "│", ["7"] = "└" })
+  local bm = kunai("body")
+  eq({ bm.line, bm.end_line }, { 5, 7 })
+end
+
+T["ranges"]["jump flashes, picker, quickfix and manager show the range"] = function()
+  main_lua(1)
+  child.lua([[require("hiraishin").add({ line = 3, end_line = 5, name = "body" })]])
+  child.lua([[require("hiraishin").jump("body")]])
+  local flash = child.lua_get(
+    [[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").flash_ns, 0, -1, { details = true })[1] ]]
+  )
+  eq({ flash[2], flash[4].end_row }, { 2, 5 })
+  eq(child.lua_get([[(require("hiraishin.picker").entries())[1].label]]):match("src/main.lua:3%-5") ~= nil, true)
+  child.lua([[require("hiraishin").to_quickfix({ open = false })]])
+  eq(child.lua_get([[{ vim.fn.getqflist()[1].lnum, vim.fn.getqflist()[1].end_lnum }]]), { 3, 5 })
+  child.cmd("Hiraishin manager")
+  local line = child.api.nvim_buf_get_lines(0, 0, 1, false)[1]
+  eq(line:match("src/main.lua:3%-5") ~= nil, true)
+  child.api.nvim_buf_set_lines(0, 0, 1, false, { (line:gsub("body", "renamed")) })
+  child.cmd("write")
+  local bm = stored("renamed")
+  eq({ bm.line, bm.end_line }, { 3, 5 })
+end
+
+T["ranges"]["the visual-mode key places one over the selection"] = function()
+  child.lua(
+    [[vim.g.mapleader = " "; require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 }, signs = { style = "emoji" } })]]
+  )
+  main_lua(2)
+  child.type_keys("V", "2j", " hh")
+  local bm = child.lua_get([[require("hiraishin").list()[1] ]])
+  eq({ bm.line, bm.end_line }, { 2, 4 })
+end
+
 return T

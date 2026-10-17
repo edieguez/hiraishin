@@ -45,10 +45,12 @@ function M.render_lines(ctx, list)
   for _, bm in ipairs(list_ops.items(list)) do
     local line, invalid = tracker.live_line(ctx, bm)
     local stale = bm.stale or invalid
+    local _, end_line = tracker.live_range(ctx, bm)
+    local span = (not stale and end_line and line and end_line > line) and ("-" .. end_line) or ""
     local row = {
       slot = list_ops.slot_of(list, bm.id) or "-",
       name = bm.name or "-",
-      path = string.format("%s:%d%s", bm.file, line or bm.line, stale and " !" or ""),
+      path = string.format("%s:%d%s%s", bm.file, line or bm.line, span, stale and " !" or ""),
       note = bm.note and bm.note:gsub("\n", NEWLINE) or "",
       id = bm.id,
     }
@@ -155,7 +157,7 @@ function M.parse_line(text, lnum)
   if name == "-" or name == "" then
     name = nil
   end
-  local path = vim.trim(fields[3]):gsub("%s+!$", ""):gsub(":%d+$", "")
+  local path = vim.trim(fields[3]):gsub("%s+!$", ""):gsub(":%d+%-%d+$", ""):gsub(":%d+$", "")
   local note = vim.trim(table.concat(vim.list_slice(fields, 4), "│"))
   note = note ~= "" and note:gsub(vim.pesc(vim.trim(NEWLINE)), "\n"):gsub(" ?\n ?", "\n") or nil
   return { lnum = lnum, id = id, slot = slot, name = name, file = path, note = note }
