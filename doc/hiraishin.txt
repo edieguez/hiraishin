@@ -372,8 +372,11 @@ Copies are returned; change kunai through the API.
   HiraishinAdd            placed (also by undo and import)
   HiraishinRemove         removed; `data.reason`
   HiraishinUpdate         name, note or seal changed
-  HiraishinMoved          line changed; `data.reason`: edit, reanchor,
-                          rename, relocate
+  HiraishinMoved          line or file changed; `data.reason`: edit,
+                          reanchor, rename, relocate; `data.from` is the
+                          old line. Renames and relocations also give
+                          `data.from_file` (old file, relative to the old
+                          root) and `data.from_path` (absolute)
   HiraishinStale          its line could not be found
   HiraishinJump           before a jump; `data.from` is where you were
   HiraishinListChanged    active list, scope or store changed

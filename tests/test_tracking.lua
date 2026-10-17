@@ -262,6 +262,22 @@ T["renames"][":saveas carries kunai to the new name"] = function()
   eq(child.signs(), { ["4"] = "⚡" })
 end
 
+T["renames"]["HiraishinMoved says which file a kunai came from"] = function()
+  main_lua(3)
+  child.lua([[require("hiraishin").add({ name = "hello" })]])
+  child.lua([[
+    _G.moved = {}
+    vim.api.nvim_create_autocmd("User", { pattern = "HiraishinMoved", callback = function(ev)
+      table.insert(_G.moved, { ev.data.reason, ev.data.from_file, ev.data.from_path, ev.data.bookmark.file })
+    end })
+    vim.uv.fs_rename(T.proj_a .. "/src/main.lua", T.proj_b .. "/main.lua")
+    require("hiraishin").rename(T.proj_a .. "/src/main.lua", T.proj_b .. "/main.lua")
+  ]])
+  eq(child.lua_get("_G.moved"), {
+    { "rename", "src/main.lua", child.T("proj_a") .. "/src/main.lua", "main.lua" },
+  })
+end
+
 T["renames"]["rename() moves a whole directory"] = function()
   main_lua(3)
   child.lua([[require("hiraishin").add({ name = "hello" })]])

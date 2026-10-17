@@ -673,6 +673,7 @@ function M.relocate(key, opts)
     list = list_name,
     from = from.line,
     from_file = from.file,
+    from_path = util.abspath(ctx.root, from.file),
     reason = "relocate",
   })
   return vim.deepcopy(bm)
@@ -984,7 +985,8 @@ function M.rename(from, to)
           bookmark = vim.deepcopy(bm),
           list = list_name,
           from = bm.line,
-          from_file = old_file,
+          from_file = old_file, -- relative to the old root, like bookmark.file
+          from_path = abs, -- absolute old path
           reason = "rename",
         })
       end

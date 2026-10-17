@@ -360,7 +360,8 @@ h.status()
 ```
 
 `User` autocmd events: `HiraishinAdd`, `HiraishinRemove`, `HiraishinUpdate`,
-`HiraishinMoved` (`data.reason`: edit, reanchor, rename or relocate),
+`HiraishinMoved` (`data.reason`: edit, reanchor, rename or relocate;
+renames and relocations add `data.from_file` / `data.from_path`),
 `HiraishinStale`, `HiraishinJump` (fired before a jump; `data.from` is where
 you were) and `HiraishinListChanged`.
 
