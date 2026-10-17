@@ -16,6 +16,33 @@ local T = MiniTest.new_set({
 
 T["config"] = MiniTest.new_set()
 
+T["config"]["setup() and setup({}) keep the defaults"] = function()
+  child.lua([[require("hiraishin").setup()]])
+  eq(child.lua_get([[require("hiraishin.config").options.scope]]), "project")
+  child.lua([[require("hiraishin").setup({})]])
+  eq(
+    child.lua_get([[require("hiraishin.config").options]]),
+    child.lua_get([[(function()
+    local d = vim.deepcopy(require("hiraishin.config").defaults)
+    d.storage.dir = vim.fs.normalize(d.storage.dir)
+    return d
+  end)()]])
+  )
+end
+
+T["config"]["empty nested tables keep the defaults"] = function()
+  child.lua([[require("hiraishin").setup({ signs = {}, root = {} })]])
+  eq(child.lua_get([[require("hiraishin.config").options.signs.icon]]), "⚡")
+  eq(child.lua_get([[require("hiraishin.config").options.root.markers]]), { ".git", ".hiraishin" })
+end
+
+T["config"]["works with lazy.nvim style opts = {}"] = function()
+  child.restart({ "-u", "scripts/minimal_init.lua" })
+  child.lua([[require("hiraishin").setup({})]])
+  eq(child.lua_get([[vim.fn.exists(":Hiraishin")]]), 2)
+  eq(child.lua_get([[vim.fn.maparg("\\hh", "n")]]), "<Cmd>Hiraishin toggle<CR>")
+end
+
 T["config"]["replaces lists instead of merging them by index"] = function()
   child.lua([[require("hiraishin").setup({ root = { markers = { ".svn" } }, storage = { dir = T.storage } })]])
   eq(child.lua_get([[require("hiraishin.config").options.root.markers]]), { ".svn" })

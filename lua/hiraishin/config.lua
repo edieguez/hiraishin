@@ -37,7 +37,12 @@ local SCOPES = { project = true, global = true }
 
 ---Deep merge where lists are replaced wholesale instead of merged by index.
 local function merge(base, override)
-  if type(base) ~= "table" or type(override) ~= "table" or vim.islist(override) then
+  if type(base) ~= "table" or type(override) ~= "table" then
+    return override
+  end
+  -- vim.islist({}) is true, so only treat non-empty tables (or list defaults)
+  -- as lists; an empty override table must not wipe the defaults
+  if (vim.islist(base) and next(base) ~= nil) or (next(override) ~= nil and vim.islist(override)) then
     return override
   end
   local out = vim.deepcopy(base)
