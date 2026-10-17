@@ -3,8 +3,8 @@
 Project-aware bookmarks for Neovim. Place a **kunai** on a line, name it, and
 come back to it across edits, restarts and projects.
 
-> Work in progress — phase 4 of 6 (core, storage, line tracking, seals,
-> navigation and picker). The manager and lists are on the way.
+All six phases of the spec are in: storage, line tracking, seals and
+navigation, picker, manager and lists. `:h hiraishin` has the full manual.
 
 ## Requirements
 
@@ -37,6 +37,11 @@ come back to it across edits, restarts and projects.
 | `<leader>hf` | `:Hiraishin pick` | Find a kunai, with preview (`pick buffer` for this file only) |
 | `<leader>hF` | `:Hiraishin pick all` | Find across every list |
 | `<leader>hq` | `:Hiraishin quickfix [all]` | Send kunai to the quickfix list (`:Hiraishin loclist` for the location list) |
+| `<leader>he` | `:Hiraishin manager` | Edit the list in a buffer: seals, names, notes, order, deletions |
+| `<leader>hu` | `:Hiraishin undo` | Bring back the last deleted kunai |
+| `<leader>hl` | `:Hiraishin list [name]` | Switch list (creates it if new); `list delete {name}` |
+| | `:Hiraishin scope project\|global\|branch` | Switch scope for this session |
+| | `:Hiraishin import marks` | Turn global marks A–Z into kunai |
 
 **Seals** are numbered slots: a kunai can hold one, and putting a seal that is
 already taken on another kunai moves it there. The sign column shows the seal
@@ -61,6 +66,40 @@ the rest by `picker.sort`. Inside the picker:
 
 All of these are configurable under `picker.keys`. `vim.ui.select` can only
 jump, and mini.pick splits with its own `<C-s>` / `<C-v>` / `<C-t>`.
+
+### Manager
+
+`<leader>he` opens the active list as a buffer, one line per kunai:
+
+```
+1 │ auth-entry │ internal/auth/handler.go:42 │ Token refresh starts here
+- │ -          │ cmd/server/main.go:17       │
+```
+
+Change a seal (`1`–`9` or `-`), a name (`-` for none) or a note, move lines to
+reorder, delete lines to delete kunai, then `:w`. Problems (two kunai with one
+seal, a duplicate name, an edited path) show as diagnostics and nothing is
+applied. `<CR>` jumps, `<Tab>` shows the next list, `q` closes.
+`:Hiraishin undo` brings back deletions made anywhere.
+
+### Lists and scopes
+
+Lists group kunai, for example one per task: `:Hiraishin list bug-1234`
+creates and switches to it. Seals belong to the list, so `<leader>1` follows
+the list you are in. Scopes decide where lists live: per **project** (default),
+**global**, or per **branch**, where a new branch starts from the project's
+kunai and gets its own store on the first change. Checking out another branch
+swaps the kunai when Neovim regains focus.
+
+### Statusline
+
+`require("hiraishin").status()` returns `⚡3 [bug-1234]`. For lualine:
+
+```lua
+sections = { lualine_x = { require("hiraishin.integrations.lualine") } }
+```
+
+`:checkhealth hiraishin` checks storage, config, picker and keymaps.
 
 `]m` / `[m` replace Vim's "next method start" motions; set
 `keymaps = { next = false, prev = false }` to keep those.
@@ -94,7 +133,7 @@ Defaults:
 
 ```lua
 require("hiraishin").setup({
-  scope = "project",              -- "project" | "global"
+  scope = "project",              -- "project" | "global" | "branch"
   root = {
     markers = { ".git", ".hiraishin" },
     fn = nil,                     -- function(bufnr, path) -> root path
@@ -138,13 +177,16 @@ require("hiraishin").setup({
     center = true,                -- zz
     open_folds = true,            -- zv
   },
+  manager = { width = 0.8, height = 0.6, border = "rounded", confirm_delete = true },
+  undo_history = 20,
   confirm_remove_named = true,
   keymaps = true,                 -- false disables all, or override per action:
 })
 ```
 
 Keymap overrides: single actions (`toggle`, `add`, `note`, `delete`, `next`,
-`prev`, `next_list`, `prev_list`, `pick`, `pick_all`, `quickfix`) take a key or `false`; the nine-key groups
+`prev`, `next_list`, `prev_list`, `pick`, `pick_all`, `quickfix`, `manager`,
+`list`, `undo`) take a key or `false`; the nine-key groups
 `assign_slot` and `jump_slot` take a prefix or `false`:
 
 ```lua
@@ -155,9 +197,10 @@ keymaps = {
 }
 ```
 
-Bookmarks are stored per project root in
-`stdpath("data")/hiraishin/projects/<root>__<hash>.json` (or `global.json`),
-written atomically.
+Kunai are stored in `stdpath("data")/hiraishin/`:
+`projects/<root>__<hash>.json` per project (`…@<branch>.json` in branch
+scope) or `global.json`, written atomically. A store changed by another
+Neovim is reloaded when Neovim regains focus.
 
 ## Lua API
 
@@ -182,11 +225,20 @@ h.relocate(id_or_name, { bufnr?, line? })
 h.stale({ all? })                           --> { { bookmark, list }, ... }
 h.prune()
 h.rename(from, to)
+h.manager()
+h.undo()
+h.lists()                                   --> names, active
+h.set_list(name)
+h.delete_list(name)
+h.set_scope("project"|"global"|"branch")
+h.import_marks()
+h.status()
 ```
 
 `User` events: `HiraishinAdd`, `HiraishinRemove`, `HiraishinUpdate`,
 `HiraishinMoved` (`data.reason`: edit, reanchor, rename, relocate),
-`HiraishinStale`, `HiraishinJump` (before a jump; `data.from` is where you were).
+`HiraishinStale`, `HiraishinJump` (before a jump; `data.from` is where you were),
+`HiraishinListChanged`.
 
 ## Development
 

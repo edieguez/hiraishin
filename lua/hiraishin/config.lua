@@ -2,7 +2,7 @@
 local M = {}
 
 M.defaults = {
-  -- "project" | "global"   ("branch" arrives in a later phase)
+  -- "project" | "global" | "branch" (project + git branch, forked on first change)
   scope = "project",
   root = {
     markers = { ".git", ".hiraishin" },
@@ -57,6 +57,13 @@ M.defaults = {
       quickfix = "<C-q>",
     },
   },
+  manager = {
+    width = 0.8, -- fraction of the editor
+    height = 0.6,
+    border = "rounded",
+    confirm_delete = true,
+  },
+  undo_history = 20, -- deletions :Hiraishin undo can bring back
   -- ask before toggling off a kunai that has a name or a note
   confirm_remove_named = true,
   -- false disables all default keymaps; a table overrides per action
@@ -69,7 +76,7 @@ M.options = vim.deepcopy(M.defaults)
 ---@type string[]
 M.unknown = {}
 
-local SCOPES = { project = true, global = true }
+local SCOPES = { project = true, global = true, branch = true }
 
 ---Deep merge where lists are replaced wholesale instead of merged by index.
 local function merge(base, override)
@@ -115,7 +122,7 @@ end
 
 local function validate(o)
   if not SCOPES[o.scope] then
-    error(string.format("hiraishin: scope: expected 'project' or 'global', got %s", vim.inspect(o.scope)), 0)
+    error(string.format("hiraishin: scope: expected 'project', 'global' or 'branch', got %s", vim.inspect(o.scope)), 0)
   end
   check("root.markers", o.root.markers, "table")
   check("root.fn", o.root.fn, "function", true)
@@ -158,6 +165,11 @@ local function validate(o)
   for name, key in pairs(o.picker.keys) do
     check("picker.keys." .. name, key, { "string", "boolean" })
   end
+  check("manager.width", o.manager.width, "number")
+  check("manager.height", o.manager.height, "number")
+  check("manager.border", o.manager.border, { "string", "table" })
+  check("manager.confirm_delete", o.manager.confirm_delete, "boolean")
+  check("undo_history", o.undo_history, "number")
   check("confirm_remove_named", o.confirm_remove_named, "boolean")
   check("keymaps", o.keymaps, { "boolean", "table" })
 end

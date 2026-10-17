@@ -191,6 +191,8 @@ function M.actions.delete(ctx, e)
   if not bm then
     return
   end
+  local history = require("hiraishin.history")
+  history.record(ctx, { history.item(ctx, e.list, list, bm) }, "picker")
   list_ops.delete(list, bm.id)
   store.changed(ctx)
   tracker.reconcile({ store = ctx.store })

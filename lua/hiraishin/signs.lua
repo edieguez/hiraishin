@@ -16,6 +16,8 @@ function M.setup_highlights()
     HiraishinSignStale = "DiagnosticWarn",
     HiraishinLine = "CursorLine",
     HiraishinVirtText = "Comment",
+    HiraishinManagerSlot = "HiraishinSignSlot",
+    HiraishinStatus = "HiraishinSign",
   }
   for group, target in pairs(links) do
     vim.api.nvim_set_hl(0, group, { link = target, default = true })

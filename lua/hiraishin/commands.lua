@@ -183,6 +183,97 @@ M.subcommands = {
       return { "all" }
     end,
   },
+  manager = {
+    run = function()
+      require("hiraishin").manager()
+    end,
+  },
+  undo = {
+    run = function()
+      local n, msg = require("hiraishin").undo()
+      if not n then
+        return warn(msg)
+      end
+      util.notify(string.format("restored %d kunai%s", n, msg and (" (" .. msg .. ")") or ""))
+    end,
+  },
+  list = {
+    -- :Hiraishin list            choose a list (or create one)
+    -- :Hiraishin list {name}     switch to it, creating it if needed
+    -- :Hiraishin list delete {name}
+    run = function(args)
+      local h = require("hiraishin")
+      if args[1] == "delete" then
+        local name = table.concat(vim.list_slice(args, 2), " ")
+        if name == "" then
+          return warn("usage: :Hiraishin list delete {name}")
+        end
+        local msg = string.format("Delete list '%s' and its kunai? (:Hiraishin undo brings them back)", name)
+        if vim.fn.confirm(msg, "&Yes\n&No", 2) == 1 then
+          local _, err = h.delete_list(name)
+          if err then
+            warn(err)
+          end
+        end
+        return
+      end
+      if #args > 0 then
+        h.set_list(table.concat(args, " "))
+        return
+      end
+      local names, active = h.lists()
+      local NEW = "+ new list…"
+      table.insert(names, NEW)
+      vim.ui.select(names, {
+        prompt = "Kunai list",
+        format_item = function(n)
+          return n == active and (n .. "  (active)") or n
+        end,
+      }, function(choice)
+        if choice == NEW then
+          vim.ui.input({ prompt = "New list name: " }, function(name)
+            if name and vim.trim(name) ~= "" then
+              h.set_list(name)
+            end
+          end)
+        elseif choice then
+          h.set_list(choice)
+        end
+      end)
+    end,
+    complete = function()
+      local names = require("hiraishin").lists()
+      table.insert(names, "delete")
+      return names
+    end,
+  },
+  scope = {
+    -- :Hiraishin scope {project|global|branch}  (this session only)
+    run = function(args)
+      if not args[1] then
+        return util.notify("scope: " .. require("hiraishin.config").options.scope)
+      end
+      local _, err = require("hiraishin").set_scope(args[1])
+      if err then
+        warn(err)
+      end
+    end,
+    complete = function()
+      return { "project", "global", "branch" }
+    end,
+  },
+  import = {
+    -- :Hiraishin import marks
+    run = function(args)
+      if args[1] ~= "marks" then
+        return warn("usage: :Hiraishin import marks")
+      end
+      util.notify(string.format("imported %d global marks", require("hiraishin").import_marks()))
+    end,
+    complete = function()
+      return { "marks" }
+    end,
+  },
   relocate = {
     run = function(args)
       local h = require("hiraishin")

@@ -1,5 +1,6 @@
 local config = require("hiraishin.config")
 local events = require("hiraishin.events")
+local history = require("hiraishin.history")
 local list_ops = require("hiraishin.list")
 local scope = require("hiraishin.scope")
 local signs = require("hiraishin.signs")
@@ -78,6 +79,14 @@ function M.setup(opts)
     group = group,
     callback = function()
       scope.invalidate()
+      M.refresh()
+    end,
+  })
+  -- another Neovim may have written the store, or the git branch changed
+  vim.api.nvim_create_autocmd("FocusGained", {
+    group = group,
+    callback = function()
+      M.refresh()
     end,
   })
   vim.api.nvim_create_autocmd("ColorScheme", {
@@ -229,6 +238,7 @@ function M.remove(key, opts)
     return nil, string.format("no kunai '%s'", key)
   end
   local copy = snapshot(ctx, bm)
+  history.record(ctx, { history.item(ctx, list_name, list, bm) }, opts.reason or "api")
   list_ops.delete(list, bm.id)
   changed(ctx)
   events.emit("HiraishinRemove", { bookmark = copy, list = list_name, reason = opts.reason or "api" })
@@ -513,6 +523,12 @@ function M.prune(opts)
   local ctx = scope.resolve(opts.bufnr)
   local data = store.get(ctx)
   local removed = M.stale(opts)
+  local items = {}
+  for _, r in ipairs(removed) do
+    local list = data.lists[r.list]
+    table.insert(items, history.item(ctx, r.list, list, list.bookmarks[r.bookmark.id]))
+  end
+  history.record(ctx, items, "prune")
   for _, r in ipairs(removed) do
     list_ops.delete(data.lists[r.list], r.bookmark.id)
     events.emit("HiraishinRemove", { bookmark = r.bookmark, list = r.list, reason = "prune" })
@@ -560,6 +576,258 @@ function M.relocate(key, opts)
     reason = "relocate",
   })
   return vim.deepcopy(bm)
+end
+
+---Bring back the most recently deleted kunai (toggle, delete, picker,
+---manager or prune). Their seal comes back if it is still free.
+---@return integer? restored, string? err_or_notice
+function M.undo()
+  ensure_setup()
+  local entry = history.pop()
+  if not entry then
+    return nil, "nothing to undo"
+  end
+  local ctx = entry.ctx
+  local data = store.get(ctx)
+  local restored, notes = 0, {}
+  -- restore in original order so positions line up
+  table.sort(entry.items, function(a, b)
+    return a.index < b.index
+  end)
+  for _, item in ipairs(entry.items) do
+    data.lists[item.list] = data.lists[item.list] or store.new_list()
+    local list = data.lists[item.list]
+    local bm = vim.deepcopy(item.bookmark)
+    local occupant = list_ops.find_at(list, bm.file, bm.line, line_fn(ctx))
+    if occupant then
+      table.insert(notes, string.format("%s:%d already has a kunai", bm.file, bm.line))
+    else
+      if list.bookmarks[bm.id] then
+        bm.id = util.new_id(list.bookmarks)
+      end
+      if bm.name and list_ops.find_name(list, bm.name) then
+        table.insert(notes, string.format("name '%s' is taken; restored without it", bm.name))
+        bm.name = nil
+      end
+      bm.updated_at = os.time()
+      list.bookmarks[bm.id] = bm
+      table.insert(list.order, math.min(item.index, #list.order + 1), bm.id)
+      if item.slot and not list.slots[item.slot] then
+        list.slots[item.slot] = bm.id
+      end
+      restored = restored + 1
+      events.emit("HiraishinAdd", { bookmark = vim.deepcopy(bm), list = item.list, reason = "undo" })
+    end
+  end
+  if restored > 0 then
+    changed(ctx)
+  end
+  return restored, #notes > 0 and table.concat(notes, "; ") or nil
+end
+
+---Pick up outside changes: a store written by another Neovim instance, or
+---(branch scope) a checkout of another branch. Runs on FocusGained.
+function M.refresh()
+  if not did_setup then
+    return
+  end
+  local reattach = {}
+  if config.options.scope == "branch" then
+    scope.invalidate()
+    for bufnr, ctx in pairs(tracker.tracked()) do
+      local now = scope.for_buf(bufnr)
+      if now and now.store ~= ctx.store then
+        reattach[bufnr] = true
+      end
+    end
+    if next(reattach) then
+      store.flush()
+    end
+  end
+  local reloaded = store.reload_changed()
+  for bufnr, ctx in pairs(tracker.tracked()) do
+    if reloaded[ctx.store] then
+      reattach[bufnr] = true
+    end
+  end
+  for bufnr in pairs(reattach) do
+    tracker.attach(bufnr)
+  end
+  if next(reattach) then
+    events.emit("HiraishinListChanged", { reason = "refresh" })
+  end
+end
+
+---List names of the current scope (sorted) and the active one.
+---@param opts? { bufnr?: integer }
+---@return string[] names, string active
+function M.lists(opts)
+  ensure_setup()
+  opts = opts or {}
+  local data = store.get(scope.resolve(opts.bufnr))
+  local names = vim.tbl_keys(data.lists)
+  table.sort(names)
+  return names, data.active_list
+end
+
+---Make `name` the active list, creating it when needed.
+---@param name string
+---@param opts? { bufnr?: integer }
+---@return string? name, string? err
+function M.set_list(name, opts)
+  ensure_setup()
+  opts = opts or {}
+  name = util.trim(name)
+  if not name then
+    return nil, "a list needs a name"
+  end
+  local ctx = scope.resolve(opts.bufnr)
+  local data = store.get(ctx)
+  local previous = data.active_list
+  local created = data.lists[name] == nil
+  data.lists[name] = data.lists[name] or store.new_list()
+  data.active_list = name
+  changed(ctx)
+  events.emit("HiraishinListChanged", { list = name, previous = previous, created = created })
+  return name
+end
+
+---Delete a list (not "default"). :Hiraishin undo brings its kunai back.
+---@param name string
+---@param opts? { bufnr?: integer }
+---@return boolean? ok, string? err
+function M.delete_list(name, opts)
+  ensure_setup()
+  opts = opts or {}
+  if name == "default" then
+    return nil, "the default list cannot be deleted"
+  end
+  local ctx = scope.resolve(opts.bufnr)
+  local data = store.get(ctx)
+  local list = data.lists[name]
+  if not list then
+    return nil, string.format("no list '%s'", name)
+  end
+  local items = {}
+  for _, bm in ipairs(list_ops.items(list)) do
+    table.insert(items, history.item(ctx, name, list, bm))
+  end
+  history.record(ctx, items, "list")
+  data.lists[name] = nil
+  local previous = data.active_list
+  if data.active_list == name then
+    data.active_list = "default"
+  end
+  changed(ctx)
+  events.emit("HiraishinListChanged", { list = data.active_list, previous = previous, deleted = name })
+  return true
+end
+
+---Switch scope for this session: "project", "global" or "branch".
+---@param new_scope string
+---@return boolean? ok, string? err
+function M.set_scope(new_scope)
+  ensure_setup()
+  if new_scope ~= "project" and new_scope ~= "global" and new_scope ~= "branch" then
+    return nil, "scope must be project, global or branch"
+  end
+  store.flush()
+  config.options.scope = new_scope
+  scope.invalidate()
+  tracker.reset()
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if is_file_buf(bufnr) then
+      tracker.attach(bufnr)
+    end
+  end
+  events.emit("HiraishinListChanged", { scope = new_scope })
+  return true
+end
+
+---Statusline text for a buffer: "⚡3" (kunai in it) plus "[list]" when the
+---active list is not "default". Empty when there is nothing to say.
+---@param bufnr? integer
+---@return string
+function M.status(bufnr)
+  if not did_setup then
+    return ""
+  end
+  bufnr = (bufnr == nil or bufnr == 0) and vim.api.nvim_get_current_buf() or bufnr
+  local ctx = scope.for_buf(bufnr)
+  if not ctx then
+    return ""
+  end
+  local list, name = list_ops.active(store.get(ctx))
+  local count = 0
+  for _, bm in ipairs(list_ops.items(list, ctx.file)) do
+    local line, invalid = tracker.live_line(ctx, bm)
+    if line and not invalid then
+      count = count + 1
+    end
+  end
+  local parts = {}
+  if count > 0 then
+    table.insert(parts, config.options.signs.icon .. count)
+  end
+  if name ~= "default" then
+    table.insert(parts, "[" .. name .. "]")
+  end
+  return table.concat(parts, " ")
+end
+
+---Turn the global marks A-Z into named kunai ("mark A", ...) in the active
+---list of each file's scope. Marks on lines that already have a kunai are skipped.
+---@return integer imported
+function M.import_marks()
+  ensure_setup()
+  local anchor = require("hiraishin.anchor")
+  local imported, touched = 0, {}
+  for code = string.byte("A"), string.byte("Z") do
+    local letter = string.char(code)
+    local mark = vim.api.nvim_get_mark(letter, {})
+    local row, col, name = mark[1], mark[2], mark[4]
+    if row > 0 and name ~= "" then
+      local abs = util.realpath(vim.fn.fnamemodify(name, ":p"))
+      if vim.fn.filereadable(abs) == 1 then
+        local ctx = scope.for_path(abs)
+        local list, list_name = list_ops.active(store.get(ctx))
+        if not list_ops.find_at(list, ctx.file, row, line_fn(ctx)) then
+          local lines = vim.fn.readfile(abs)
+          local bm_name = "mark " .. letter
+          if list_ops.find_name(list, bm_name) then
+            bm_name = nil
+          end
+          local now = os.time()
+          local bm = {
+            id = util.new_id(list.bookmarks),
+            file = ctx.file,
+            line = math.min(row, math.max(1, #lines)),
+            col = col,
+            name = bm_name,
+            anchor = anchor.capture(lines, math.min(row, math.max(1, #lines))),
+            stale = false,
+            created_at = now,
+            updated_at = now,
+          }
+          list_ops.insert(list, bm)
+          events.emit("HiraishinAdd", { bookmark = vim.deepcopy(bm), list = list_name, reason = "import" })
+          imported = imported + 1
+          touched[ctx.store] = ctx
+        end
+      end
+    end
+  end
+  for _, ctx in pairs(touched) do
+    changed(ctx)
+  end
+  return imported
+end
+
+---Open the manager: an editable buffer of the active list.
+---@param opts? { list?: string }
+function M.manager(opts)
+  ensure_setup()
+  return require("hiraishin.manager").open(opts)
 end
 
 ---Move bookmarks after a file or directory was renamed outside the usual

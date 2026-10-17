@@ -21,6 +21,9 @@ M.defaults = {
   pick = { lhs = "<leader>hf", desc = "Find kunai", rhs = "<cmd>Hiraishin pick<cr>" },
   pick_all = { lhs = "<leader>hF", desc = "Find kunai (all lists)", rhs = "<cmd>Hiraishin pick all<cr>" },
   quickfix = { lhs = "<leader>hq", desc = "Kunai to quickfix", rhs = "<cmd>Hiraishin quickfix<cr>" },
+  manager = { lhs = "<leader>he", desc = "Edit kunai (manager)", rhs = "<cmd>Hiraishin manager<cr>" },
+  list = { lhs = "<leader>hl", desc = "Switch kunai list", rhs = "<cmd>Hiraishin list<cr>" },
+  undo = { lhs = "<leader>hu", desc = "Undo kunai deletion", rhs = "<cmd>Hiraishin undo<cr>" },
   next = {
     lhs = "]m",
     desc = "Next kunai in buffer",

@@ -10,6 +10,8 @@ local M = {}
 ---@field scope string
 ---@field file string?   bookmark file key (relative to root when possible)
 ---@field abs string?    absolute file path
+---@field branch string? git branch (branch scope only)
+---@field fork_from string? store to read until the branch store exists
 
 ---Project root for a file path.
 ---@param path string absolute path (a file or a directory)
@@ -41,6 +43,29 @@ function M.store_name(root)
   return string.format("%s__%s.json", slug, vim.fn.sha256(root):sub(1, 8))
 end
 
+---Current git branch of a root, read from .git/HEAD (no git process).
+---Handles worktrees (.git file with "gitdir:"). nil when detached or no repo.
+---@param root string
+---@return string?
+function M.git_branch(root)
+  local dotgit = root .. "/.git"
+  local stat = vim.uv.fs_stat(dotgit)
+  if not stat then
+    return nil
+  end
+  local gitdir = dotgit
+  if stat.type == "file" then
+    local first = (vim.fn.readfile(dotgit, "", 1)[1] or ""):match("^gitdir:%s*(.-)%s*$")
+    if not first then
+      return nil
+    end
+    gitdir = first:sub(1, 1) == "/" and first or (root .. "/" .. first)
+  end
+  local ok, head = pcall(vim.fn.readfile, gitdir .. "/HEAD", "", 1)
+  local ref = ok and head[1] and head[1]:match("^ref:%s*refs/heads/(.-)%s*$") or nil
+  return ref ~= "" and ref or nil
+end
+
 ---@param root string?
 ---@return hiraishin.Context
 local function make(root, abs)
@@ -51,6 +76,14 @@ local function make(root, abs)
   else
     ctx.root = root
     ctx.store = o.storage.dir .. "/projects/" .. M.store_name(root)
+    if o.scope == "branch" then
+      local branch = M.git_branch(root)
+      if branch then
+        ctx.branch = branch
+        ctx.fork_from = ctx.store
+        ctx.store = ctx.store:gsub("%.json$", "") .. "@" .. branch:gsub("[^%w%-_.]", "_") .. ".json"
+      end
+    end
   end
   if abs then
     ctx.abs = abs

@@ -37,6 +37,12 @@ local function new_data(root)
   }
 end
 
+---@return string? "sec.nsec" of the file, nil when missing
+local function mtime_of(path)
+  local stat = vim.uv.fs_stat(path)
+  return stat and (stat.mtime.sec .. "." .. stat.mtime.nsec) or nil
+end
+
 local function read_file(path)
   local fd = vim.uv.fs_open(path, "r", 438)
   if not fd then
@@ -152,7 +158,12 @@ end
 function M.get(ctx)
   local entry = cache[ctx.store]
   if not entry then
-    entry = { data = load(ctx.store, ctx.root), dirty = false }
+    -- branch scope: until the branch has its own file, start from the project's
+    local source = ctx.store
+    if ctx.fork_from and not vim.uv.fs_stat(ctx.store) and vim.uv.fs_stat(ctx.fork_from) then
+      source = ctx.fork_from
+    end
+    entry = { data = load(source, ctx.root), dirty = false, mtime = mtime_of(ctx.store), root = ctx.root }
     cache[ctx.store] = entry
     -- kunai whose file is gone are stale until the file shows up again
     for _, list in pairs(entry.data.lists) do
@@ -185,6 +196,7 @@ local function save(path)
     return false
   end
   entry.dirty = false
+  entry.mtime = mtime_of(path)
   return true
 end
 
@@ -216,6 +228,23 @@ function M.changed(ctx)
   end
   timer:stop()
   timer:start(ms, 0, vim.schedule_wrap(M.flush))
+end
+
+---Reload stores whose file changed on disk (another Neovim wrote it) and
+---that have no unsaved changes here.
+---@return table<string, boolean> reloaded store paths
+function M.reload_changed()
+  local reloaded = {}
+  for path, entry in pairs(cache) do
+    local now = mtime_of(path)
+    if now and now ~= entry.mtime and not entry.dirty then
+      local data = load(path, entry.root)
+      entry.data = data
+      entry.mtime = now
+      reloaded[path] = true
+    end
+  end
+  return reloaded
 end
 
 ---Drop cached data (tests, or after changing the storage directory).

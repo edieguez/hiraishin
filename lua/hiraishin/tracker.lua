@@ -371,6 +371,16 @@ function M.live_line(ctx, bm)
   return bm.line, false
 end
 
+---Tracked buffers and the store context each one follows.
+---@return table<integer, hiraishin.Context>
+function M.tracked()
+  local out = {}
+  for bufnr, t in pairs(tracked) do
+    out[bufnr] = t.ctx
+  end
+  return out
+end
+
 ---@param bufnr integer
 ---@return boolean
 function M.is_tracked(bufnr)
