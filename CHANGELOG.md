@@ -1,8 +1,12 @@
 # Changelog
 
-## Unreleased
+Versions are git tags (`git checkout v0.6.0`). Dates are when the version
+was tagged.
 
-### Backlog
+## v0.7.0 — 2026-10-17
+
+The backlog: housekeeping, persistence and two new kinds of kunai.
+
 - `:Hiraishin gc` deletes store files nobody needs: projects whose folder is
   gone, deleted branches, empty stores and corrupt backups (asks first);
   `:checkhealth` reports them
@@ -24,7 +28,10 @@
   in Visual mode mark a block of lines; it follows edits, keeps its length
   when re-anchored, and jumps flash the block (`end_line` in the API)
 
-### UX and UI pass
+## v0.6.0 — 2026-10-17
+
+UX and UI pass.
+
 - Seals are quick jumps: sealing a bare line makes a kunai just for the seal,
   and it goes away when the seal is cleared or moved (undoable); kunai placed,
   named or noted on purpose stay
@@ -43,9 +50,11 @@
 - Saves merge changes another Neovim made to the same store
 - `.hiraishin` can set `scope` and `picker.sort` per project (trusted via
   `vim.secure.read`)
-- Fix: a named kunai's name could be drawn twice
+## v0.5.0 — 2026-10-17
 
-### Phase 6 — lists, scopes and polish
+Phases 5 and 6.
+
+### Lists, scopes and polish
 - Lists: `:Hiraishin list [name]`, `list delete`, `<leader>hl`; seals are per list;
   kunai of other lists keep tracking edits; `HiraishinListChanged` event
 - Scopes: `:Hiraishin scope project|global|branch`; branch scope reads
@@ -57,23 +66,43 @@
 - `:Hiraishin import marks` turns global marks A–Z into kunai
 - Vim help: `:h hiraishin`
 
-### Phase 5 — manager and undo
+### Manager and undo
 - `:Hiraishin manager` / `<leader>he`: edit seals, names and notes, reorder and
   delete kunai in a buffer; `:w` applies, problems show as diagnostics
 - `:Hiraishin undo` / `<leader>hu` brings back deletions from toggle, delete,
   the picker, the manager, prune and deleted lists (`undo_history`)
 
-### Phase 4 — picker
+## v0.4.0 — 2026-10-17
+
+Phase 4: picker.
+
 - snacks.picker, telescope, fzf-lua and mini.pick backends, `vim.ui.select`
   fallback; jump, splits, delete, rename, note and quickfix actions
 - `:Hiraishin pick`, `quickfix`, `loclist`
 
-### Phase 3 — seals, names and navigation
+## v0.3.1 — 2026-10-17
+
+- Fix: a named kunai's name was drawn twice at the end of the line
+
+## v0.3.0 — 2026-10-17
+
+Phase 3: seals, names and navigation.
+
 - Seals 1–9, jumps by seal or name, `]m` `[m` `]M` `[M`, notes, virtual text
 
-### Phase 2 — line tracking
+## v0.2.0 — 2026-10-17
+
+Phase 2: line tracking.
+
 - Extmark tracking, sync on write, re-anchoring after external changes,
   stale kunai, renames, `relocate`, `prune`
 
-### Phase 1 — core and storage
+## v0.1.1 — 2026-10-17
+
+- Fix: `setup({})` (lazy.nvim's `opts = {}`) wiped the defaults
+
+## v0.1.0 — 2026-10-17
+
+Phase 1: core and storage.
+
 - Per-project JSON stores with atomic writes, toggle/add/delete, signs

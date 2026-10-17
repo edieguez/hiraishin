@@ -33,10 +33,14 @@ one key, the way Minato jumps to his marked kunai.
 ```lua
 {
   "edieguez/hiraishin",
+  version = "*", -- the latest release tag; drop it to follow the main branch
   event = "VeryLazy",
   opts = {},
 }
 ```
+
+Releases are git tags (`v0.7.0`, …); [CHANGELOG.md](CHANGELOG.md) lists what
+each one brought.
 
 Call `require("hiraishin").setup({})` with any other plugin manager. In LazyVim
 the picker follows your `vim.g.lazyvim_picker`.
