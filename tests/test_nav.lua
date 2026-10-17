@@ -273,6 +273,39 @@ T["display"]["named kunai show their name, notes add an icon"] = function()
   eq(virt_texts(), { ["1"] = "← ✎" })
 end
 
+local function screen_row(n)
+  child.cmd("redraw")
+  return vim.split(tostring(child.get_screenshot()), "\n")[n + 1]
+end
+
+T["display"]["the name is drawn exactly once through place, name, rename, note, seal"] = function()
+  main_lua(2)
+  child.lua([[vim.ui.input = function(_, cb) cb("Sample name") end]])
+  local function once(text)
+    local _, n = screen_row(2):gsub(vim.pesc(text), "")
+    return n
+  end
+  child.cmd("Hiraishin toggle")
+  child.cmd("Hiraishin! add")
+  eq(once("Sample name"), 1)
+  child.lua([[require("hiraishin").update("Sample name", { name = "Other" })]])
+  eq({ once("Sample name"), once("Other") }, { 0, 1 })
+  child.lua([[require("hiraishin").update("Other", { note = "n" })]])
+  child.cmd("Hiraishin seal 3")
+  child.cmd("Hiraishin seal clear")
+  eq(once("Other"), 1)
+  eq(#child.lua_get([[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").ns, 0, -1, {})]]), 1)
+end
+
+T["display"]["unchanged kunai keep their extmark"] = function()
+  main_lua()
+  place(3, "hello")
+  local before = child.lua_get([==[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").ns, 0, -1, {})[1][1]]==])
+  child.lua([[require("hiraishin.tracker").render(vim.api.nvim_get_current_buf())]])
+  local after = child.lua_get([==[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").ns, 0, -1, {})[1][1]]==])
+  eq(after, before)
+end
+
 T["display"]["virtual text and line highlight are configurable"] = function()
   child.lua([[require("hiraishin").setup({ storage = { dir = T.storage, debounce_ms = 0 },
     line_highlight = true, virt_text = { enabled = false } })]])
@@ -293,9 +326,9 @@ T["names"]["suggests the enclosing function via Treesitter"] = function()
   eq(child.lua_get([[require("hiraishin.names").suggest()]]), "M.hello")
 end
 
-T["names"]["falls back to the word under the cursor"] = function()
+T["names"]["no suggestion outside a symbol (never the word under the cursor)"] = function()
   child.edit(child.T("loose") .. "/notes.txt", 2)
-  eq(child.lua_get([[require("hiraishin.names").suggest()]]), "two")
+  eq(child.lua_get([[require("hiraishin.names").suggest()]]), vim.NIL)
 end
 
 T["names"][":Hiraishin! add pre-fills the suggestion"] = function()

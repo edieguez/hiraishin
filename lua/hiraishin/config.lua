@@ -43,6 +43,20 @@ M.defaults = {
     center = true, -- zz after jumping
     open_folds = true, -- zv after jumping
   },
+  picker = {
+    backend = "auto", -- "auto" | "snacks" | "telescope" | "fzf-lua" | "mini" | "select"
+    sort = "recent", -- after sealed kunai: "recent" | "manual" | "path" | "created"
+    show_notes = true,
+    keys = {
+      vsplit = "<C-v>",
+      split = "<C-s>",
+      tab = "<C-t>",
+      delete = "<C-d>",
+      rename = "<C-e>",
+      note = "<C-o>",
+      quickfix = "<C-q>",
+    },
+  },
   -- ask before toggling off a kunai that has a name or a note
   confirm_remove_named = true,
   -- false disables all default keymaps; a table overrides per action
@@ -132,6 +146,18 @@ local function validate(o)
   check("jump.reuse_window", o.jump.reuse_window, "boolean")
   check("jump.center", o.jump.center, "boolean")
   check("jump.open_folds", o.jump.open_folds, "boolean")
+  local backends = { auto = true, snacks = true, telescope = true, ["fzf-lua"] = true, mini = true, select = true }
+  if not backends[o.picker.backend] then
+    error("hiraishin: picker.backend: expected auto, snacks, telescope, fzf-lua, mini or select", 0)
+  end
+  local sorts = { recent = true, manual = true, path = true, created = true }
+  if not sorts[o.picker.sort] then
+    error("hiraishin: picker.sort: expected recent, manual, path or created", 0)
+  end
+  check("picker.show_notes", o.picker.show_notes, "boolean")
+  for name, key in pairs(o.picker.keys) do
+    check("picker.keys." .. name, key, { "string", "boolean" })
+  end
   check("confirm_remove_named", o.confirm_remove_named, "boolean")
   check("keymaps", o.keymaps, { "boolean", "table" })
 end

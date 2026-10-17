@@ -149,6 +149,40 @@ M.subcommands = {
       require("hiraishin").note()
     end,
   },
+  pick = {
+    -- :Hiraishin pick [buffer|all]
+    run = function(args)
+      local filter = args[1]
+      if filter and filter ~= "buffer" and filter ~= "all" then
+        return warn("usage: :Hiraishin pick [buffer|all]")
+      end
+      require("hiraishin").pick({ filter = filter })
+    end,
+    complete = function()
+      return { "buffer", "all" }
+    end,
+  },
+  quickfix = {
+    -- :Hiraishin quickfix [all]
+    run = function(args)
+      if require("hiraishin").to_quickfix({ all = args[1] == "all" }) == 0 then
+        util.notify("no kunai to send")
+      end
+    end,
+    complete = function()
+      return { "all" }
+    end,
+  },
+  loclist = {
+    run = function(args)
+      if require("hiraishin").to_quickfix({ loclist = true, all = args[1] == "all" }) == 0 then
+        util.notify("no kunai to send")
+      end
+    end,
+    complete = function()
+      return { "all" }
+    end,
+  },
   relocate = {
     run = function(args)
       local h = require("hiraishin")

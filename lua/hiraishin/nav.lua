@@ -44,9 +44,19 @@ end
 ---Open `abs` according to `split` and return the window.
 ---@param abs string
 ---@param split? "vsplit"|"split"|"tab"
+---@param here? boolean open in the current window, no window reuse
 ---@return integer? win, string? err
-local function open(abs, split)
+local function open(abs, split, here)
   local cmds = { vsplit = "vsplit", split = "split", tab = "tabedit" }
+  if here and not split then
+    if util.buf_path(0) ~= abs then
+      local ok, err = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(abs))
+      if not ok then
+        return nil, tostring(err):gsub("^Vim:", "")
+      end
+    end
+    return vim.api.nvim_get_current_win()
+  end
   if not split and config.options.jump.reuse_window then
     local win = win_showing(abs)
     if win then
@@ -70,7 +80,7 @@ end
 ---@param ctx hiraishin.Context store context the bookmark belongs to
 ---@param bm hiraishin.Bookmark
 ---@param list_name string
----@param opts? { split?: "vsplit"|"split"|"tab" }
+---@param opts? { split?: "vsplit"|"split"|"tab", here?: boolean }
 ---@return hiraishin.Bookmark? bookmark, string? err
 function M.jump(ctx, bm, list_name, opts)
   opts = opts or {}
@@ -83,7 +93,7 @@ function M.jump(ctx, bm, list_name, opts)
 
   -- remember where we were, so <C-o> comes back
   vim.cmd("normal! m'")
-  local win, err = open(abs, opts.split)
+  local win, err = open(abs, opts.split, opts.here)
   if not win then
     return nil, err
   end

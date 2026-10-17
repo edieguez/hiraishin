@@ -3,8 +3,8 @@
 Project-aware bookmarks for Neovim. Place a **kunai** on a line, name it, and
 come back to it across edits, restarts and projects.
 
-> Work in progress — phase 3 of 6 (core, storage, line tracking, seals and
-> navigation). Picker, manager and lists are on the way.
+> Work in progress — phase 4 of 6 (core, storage, line tracking, seals,
+> navigation and picker). The manager and lists are on the way.
 
 ## Requirements
 
@@ -26,7 +26,7 @@ come back to it across edits, restarts and projects.
 | Key | Command | Action |
 | --- | --- | --- |
 | `<leader>hh` | `:Hiraishin toggle` | Place or remove a kunai on the current line |
-| `<leader>ha` | `:Hiraishin! add` | Place or rename a named kunai (suggests the enclosing function) |
+| `<leader>ha` | `:Hiraishin! add` | Place or rename a named kunai (suggests the enclosing function, if any) |
 | `<leader>hn` | `:Hiraishin note` | Edit the kunai's note in a float (`:w` saves, `q` closes) |
 | `<leader>hd` | `:Hiraishin delete [name]` | Remove the kunai on the line, or by name |
 | `<leader>h1`…`9` | `:Hiraishin seal {1-9}` | Put seal 1–9 on this line's kunai (`seal clear` removes it) |
@@ -34,11 +34,33 @@ come back to it across edits, restarts and projects.
 | | `:Hiraishin jump {name} [vsplit\|split\|tab]` | Jump by name |
 | `]m` / `[m` | `:Hiraishin next` / `prev` | Next / previous kunai in this buffer (takes a count) |
 | `]M` / `[M` | `:Hiraishin next list` / `prev list` | Next / previous kunai across files, in list order |
+| `<leader>hf` | `:Hiraishin pick` | Find a kunai, with preview (`pick buffer` for this file only) |
+| `<leader>hF` | `:Hiraishin pick all` | Find across every list |
+| `<leader>hq` | `:Hiraishin quickfix [all]` | Send kunai to the quickfix list (`:Hiraishin loclist` for the location list) |
 
 **Seals** are numbered slots: a kunai can hold one, and putting a seal that is
 already taken on another kunai moves it there. The sign column shows the seal
 number instead of ⚡. Jumps add to the jumplist, so `<C-o>` takes you back,
 and they reuse a window that already shows the file.
+
+### Picker
+
+The picker uses whichever one you have: **snacks.picker**, **telescope**,
+**fzf-lua** or **mini.pick** (in LazyVim it follows your `vim.g.lazyvim_picker`),
+falling back to `vim.ui.select`. Sealed kunai come first, by seal number, then
+the rest by `picker.sort`. Inside the picker:
+
+| Key | Action |
+| --- | --- |
+| `<CR>` | Jump |
+| `<C-v>` / `<C-s>` / `<C-t>` | Open in a vertical split / split / tab |
+| `<C-d>` | Remove the kunai (the list refreshes in place) |
+| `<C-e>` | Rename |
+| `<C-o>` | Edit the note |
+| `<C-q>` | Send the results to the quickfix list |
+
+All of these are configurable under `picker.keys`. `vim.ui.select` can only
+jump, and mini.pick splits with its own `<C-s>` / `<C-v>` / `<C-t>`.
 
 `]m` / `[m` replace Vim's "next method start" motions; set
 `keymaps = { next = false, prev = false }` to keep those.
@@ -104,6 +126,13 @@ require("hiraishin").setup({
     note_icon = "✎",
   },
   name = { suggest_from_treesitter = true },
+  picker = {
+    backend = "auto",             -- "snacks" | "telescope" | "fzf-lua" | "mini" | "select"
+    sort = "recent",              -- after sealed kunai: "recent" | "manual" | "path" | "created"
+    show_notes = true,
+    keys = { vsplit = "<C-v>", split = "<C-s>", tab = "<C-t>", delete = "<C-d>",
+             rename = "<C-e>", note = "<C-o>", quickfix = "<C-q>" },
+  },
   jump = {
     reuse_window = true,
     center = true,                -- zz
@@ -115,7 +144,7 @@ require("hiraishin").setup({
 ```
 
 Keymap overrides: single actions (`toggle`, `add`, `note`, `delete`, `next`,
-`prev`, `next_list`, `prev_list`) take a key or `false`; the nine-key groups
+`prev`, `next_list`, `prev_list`, `pick`, `pick_all`, `quickfix`) take a key or `false`; the nine-key groups
 `assign_slot` and `jump_slot` take a prefix or `false`:
 
 ```lua
@@ -144,6 +173,8 @@ h.jump(name_or_seal, { split? })
 h.next({ count?, wrap?, scope? = "buffer"|"list" })
 h.prev({ ... })
 h.note()
+h.pick({ filter? = "buffer"|"all", backend? })
+h.to_quickfix({ loclist?, all? })
 h.get(id_or_name)
 h.list({ bufnr?, include_stale? })           -- live line numbers
 h.at_cursor()
@@ -160,6 +191,6 @@ h.rename(from, to)
 ## Development
 
 ```sh
-make test          # fetches mini.nvim into deps/ and runs the suite
+make test          # fetches mini.nvim (and the picker plugins) into deps/ and runs the suite
 make test-file FILE=tests/test_store.lua
 ```

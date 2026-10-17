@@ -49,20 +49,15 @@ local function enclosing_symbol(bufnr)
   end
 end
 
----Suggested name for a kunai on the cursor line.
+---Suggested name for a kunai on the cursor line: the enclosing function,
+---method or class. No guess otherwise; a random word pre-filled in the
+---prompt gets in the way of typing a name.
 ---@param bufnr? integer
 ---@return string?
 function M.suggest(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
   if require("hiraishin.config").options.name.suggest_from_treesitter then
-    local symbol = enclosing_symbol(bufnr)
-    if symbol then
-      return symbol
-    end
-  end
-  local word = vim.fn.expand("<cword>")
-  if word ~= "" and word:match("^[%w_][%w_%.%-]*$") then
-    return word
+    return enclosing_symbol(bufnr)
   end
 end
 

@@ -1,17 +1,42 @@
 ---Editing a kunai's note in a small floating buffer.
 local M = {}
 
----Open the note editor for the kunai on the cursor line (placing one if
----needed). :w (or <C-s>) saves, q / <Esc> in normal mode closes.
-function M.edit()
-  local h = require("hiraishin")
-  local bm = h.at_cursor()
+---Write a note straight into the store (any list, any file of the scope).
+local function save_direct(target, text)
+  local store = require("hiraishin.store")
+  local list = store.get(target.ctx).lists[target.list]
+  local bm = list and list.bookmarks[target.id]
   if not bm then
-    local added, err = h.add()
-    if not added then
-      return require("hiraishin.util").notify(err or "cannot place a kunai here", vim.log.levels.WARN)
+    return
+  end
+  bm.note = text
+  bm.updated_at = os.time()
+  store.changed(target.ctx)
+  require("hiraishin.tracker").reconcile({ store = target.ctx.store })
+  require("hiraishin.events").emit("HiraishinUpdate", { bookmark = vim.deepcopy(bm), list = target.list })
+end
+
+---Open the note editor. Without `target`: the kunai on the cursor line
+---(placing one if needed). :w (or <C-s>) saves, q / <Esc> in normal mode closes.
+---@param target? { id: string, list: string, ctx: hiraishin.Context }
+function M.edit(target)
+  local h = require("hiraishin")
+  local bm
+  if target then
+    local list = require("hiraishin.store").get(target.ctx).lists[target.list]
+    bm = list and list.bookmarks[target.id]
+    if not bm then
+      return
     end
-    bm = added
+  else
+    bm = h.at_cursor()
+    if not bm then
+      local added, err = h.add()
+      if not added then
+        return require("hiraishin.util").notify(err or "cannot place a kunai here", vim.log.levels.WARN)
+      end
+      bm = added
+    end
   end
   local id = bm.id
   local origin_buf = vim.api.nvim_get_current_buf()
@@ -50,7 +75,12 @@ function M.edit()
     buffer = buf,
     callback = function()
       local text = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
-      h.update(id, { note = vim.trim(text) ~= "" and text or false }, { bufnr = origin_buf })
+      local note = vim.trim(text) ~= "" and vim.trim(text) or nil
+      if target then
+        save_direct(target, note)
+      else
+        h.update(id, { note = note or false }, { bufnr = origin_buf })
+      end
       vim.bo[buf].modified = false
       close()
     end,

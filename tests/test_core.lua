@@ -208,10 +208,21 @@ end
 T["commands"]["completes subcommands and names"] = function()
   main_lua(1)
   child.lua([[require("hiraishin").add({ name = "alpha" })]])
-  eq(
-    child.lua_get([[vim.fn.getcompletion("Hiraishin ", "cmdline")]]),
-    { "add", "delete", "jump", "next", "note", "prev", "prune", "relocate", "seal", "toggle" }
-  )
+  eq(child.lua_get([[vim.fn.getcompletion("Hiraishin ", "cmdline")]]), {
+    "add",
+    "delete",
+    "jump",
+    "loclist",
+    "next",
+    "note",
+    "pick",
+    "prev",
+    "prune",
+    "quickfix",
+    "relocate",
+    "seal",
+    "toggle",
+  })
   eq(child.lua_get([[vim.fn.getcompletion("Hiraishin delete a", "cmdline")]]), { "alpha" })
 end
 
@@ -280,7 +291,6 @@ T["keymaps"]["can be overridden or disabled"] = function()
   eq(child.lua_get([[vim.fn.maparg("<leader>hh", "n")]]), "")
 end
 
-
 T["regressions"] = MiniTest.new_set()
 
 T["regressions"]["naming a placed kunai draws its name once (bufnr 0 was tracked twice)"] = function()
@@ -289,7 +299,8 @@ T["regressions"]["naming a placed kunai draws its name once (bufnr 0 was tracked
   child.cmd("Hiraishin toggle")
   child.cmd("Hiraishin! add")
   child.cmd("Hiraishin seal 2")
-  local marks = child.lua_get([[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").ns, 0, -1, { details = true })]])
+  local marks =
+    child.lua_get([[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").ns, 0, -1, { details = true })]])
   eq(#marks, 1)
   eq(marks[1][4].sign_text, "2 ")
   child.cmd("redraw")

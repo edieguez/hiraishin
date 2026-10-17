@@ -71,7 +71,6 @@ function M.decoration(list, bm, stale)
     if vt then
       out.virt_text = vt
       out.virt_text_pos = config.options.virt_text.position
-      out.hl_mode = "combine"
     end
   end
   return out

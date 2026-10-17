@@ -18,6 +18,9 @@ M.defaults = {
   add = { lhs = "<leader>ha", desc = "Place / rename named kunai", rhs = "<cmd>Hiraishin! add<cr>" },
   note = { lhs = "<leader>hn", desc = "Edit kunai note", rhs = "<cmd>Hiraishin note<cr>" },
   delete = { lhs = "<leader>hd", desc = "Remove kunai on line", rhs = "<cmd>Hiraishin delete<cr>" },
+  pick = { lhs = "<leader>hf", desc = "Find kunai", rhs = "<cmd>Hiraishin pick<cr>" },
+  pick_all = { lhs = "<leader>hF", desc = "Find kunai (all lists)", rhs = "<cmd>Hiraishin pick all<cr>" },
+  quickfix = { lhs = "<leader>hq", desc = "Kunai to quickfix", rhs = "<cmd>Hiraishin quickfix<cr>" },
   next = {
     lhs = "]m",
     desc = "Next kunai in buffer",

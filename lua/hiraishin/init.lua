@@ -407,6 +407,30 @@ function M.prev(opts)
   return nav.step_buffer(-1, opts)
 end
 
+---Open the picker.
+---@param opts? { filter?: "buffer"|"all", backend?: string }
+function M.pick(opts)
+  ensure_setup()
+  return require("hiraishin.picker").open(opts)
+end
+
+---Send the active list (or every list with `all`) to the quickfix/location list.
+---@param opts? { loclist?: boolean, all?: boolean, open?: boolean }
+---@return integer count
+function M.to_quickfix(opts)
+  ensure_setup()
+  opts = opts or {}
+  local picker = require("hiraishin.picker")
+  local entries, ctx = picker.entries({ filter = opts.all and "all" or nil })
+  local data = store.get(ctx)
+  picker.actions.quickfix(entries, {
+    loclist = opts.loclist,
+    open = opts.open,
+    title = "Hiraishin: " .. (opts.all and "all lists" or data.active_list),
+  })
+  return #entries
+end
+
 ---Edit the note of the cursor line's kunai in a floating window.
 function M.note()
   ensure_setup()

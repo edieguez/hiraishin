@@ -15,6 +15,7 @@ local ns = signs.ns
 ---@class hiraishin.Tracked
 ---@field ctx hiraishin.Context
 ---@field marks table<string, integer> bookmark id -> extmark id
+---@field looks table<string, string> bookmark id -> signature of its decoration
 
 ---@type table<integer, hiraishin.Tracked>
 local tracked = {}
@@ -63,12 +64,17 @@ local function mark_pos(bufnr, mark_id)
   return m[1], m[3] and m[3].invalid or false
 end
 
-local function mark_opts(data, list_name, list, bm, id)
-  local opts = { id = id, invalidate = true, undo_restore = true }
+local function mark_opts(data, list_name, list, bm)
+  local opts = { invalidate = true, undo_restore = true }
   if list_name == data.active_list then
     opts = vim.tbl_extend("force", opts, signs.decoration(list, bm))
   end
   return opts
+end
+
+---Stable text form of extmark options, to detect a changed look.
+local function signature(opts)
+  return vim.inspect(opts)
 end
 
 ---Redraw signs of every kunai in the buffer without moving any mark.
@@ -81,15 +87,34 @@ function M.render(bufnr)
   end
   local data = store.get(t.ctx)
   local count = vim.api.nvim_buf_line_count(bufnr)
+  -- drop any mark in our namespace that no kunai owns (never draw twice)
+  local owned = {}
+  for _, mark_id in pairs(t.marks) do
+    owned[mark_id] = true
+  end
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, {})) do
+    if not owned[m[1]] then
+      vim.api.nvim_buf_del_extmark(bufnr, ns, m[1])
+    end
+  end
   for id, mark_id in pairs(t.marks) do
     local name, list, bm = lookup(data, id)
     local row, invalid = mark_pos(bufnr, mark_id)
     if not bm or not row then
       pcall(vim.api.nvim_buf_del_extmark, bufnr, ns, mark_id)
       t.marks[id] = nil
+      t.looks[id] = nil
     elseif not invalid then
-      -- re-setting an invalid mark would revive it; leave those hidden
-      vim.api.nvim_buf_set_extmark(bufnr, ns, row, 0, mark_opts(data, name, list, bm, mark_id))
+      -- Never update a mark in place: some Neovim versions keep drawing the
+      -- old end-of-line text next to the new one. Leave unchanged marks alone,
+      -- replace changed ones. (Invalid marks stay hidden until undo revives them.)
+      local opts = mark_opts(data, name, list, bm)
+      local sig = signature(opts)
+      if t.looks[id] ~= sig then
+        vim.api.nvim_buf_del_extmark(bufnr, ns, mark_id)
+        t.marks[id] = vim.api.nvim_buf_set_extmark(bufnr, ns, row, 0, opts)
+        t.looks[id] = sig
+      end
     end
   end
   -- stale kunai: sign only, at the last known line
@@ -110,8 +135,13 @@ end
 ---@param e { name: string, list: hiraishin.List, bm: hiraishin.Bookmark }
 local function place(bufnr, data, e)
   local t = tracked[bufnr]
+  if t.marks[e.bm.id] then
+    pcall(vim.api.nvim_buf_del_extmark, bufnr, ns, t.marks[e.bm.id])
+  end
   local row = math.min(e.bm.line, vim.api.nvim_buf_line_count(bufnr)) - 1
-  t.marks[e.bm.id] = vim.api.nvim_buf_set_extmark(bufnr, ns, row, 0, mark_opts(data, e.name, e.list, e.bm))
+  local opts = mark_opts(data, e.name, e.list, e.bm)
+  t.marks[e.bm.id] = vim.api.nvim_buf_set_extmark(bufnr, ns, row, 0, opts)
+  t.looks[e.bm.id] = signature(opts)
 end
 
 ---Re-anchor the file's kunai against the buffer content and start tracking.
@@ -124,7 +154,7 @@ function M.attach(bufnr)
   if not ctx or not vim.api.nvim_buf_is_loaded(bufnr) then
     return
   end
-  tracked[bufnr] = { ctx = ctx, marks = {} }
+  tracked[bufnr] = { ctx = ctx, marks = {}, looks = {} }
   local data = store.get(ctx)
   local items = entries(data, ctx.file)
   if #items == 0 then
