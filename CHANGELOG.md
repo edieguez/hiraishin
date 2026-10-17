@@ -3,6 +3,14 @@
 Versions are git tags (`git checkout v0.6.0`). Dates are when the version
 was tagged.
 
+## Unreleased
+
+- Fix: the fzf-lua picker ignored `picker.show_notes` and `virt_text.note_icon`
+- Unknown `keymaps` actions (typos) are reported like other unknown keys
+- `Snacks.picker.hiraishin()` is registered when snacks is lazy-loaded later
+- Tests check every option has an effect, and that the defaults printed in
+  README and `:h hiraishin-config` match the code
+
 ## v0.7.0 — 2026-10-17
 
 The backlog: housekeeping, persistence and two new kinds of kunai.

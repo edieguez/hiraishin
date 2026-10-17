@@ -269,7 +269,8 @@ only those two keys are used. |:Hiraishin-scope| still wins for the session.
 While a file is open, kunai follow your edits (extmarks). Their positions
 are saved when you write the file; |:e!| brings back the saved ones.
 
-Deleting a kunai's line makes it stale (! sign). |u| brings it back, and so
+Deleting a kunai's line makes it stale; it is drawn with the stale sign at
+its last known line the next time the file is opened. |u| brings it back, and so
 does typing the line again before the next write.
 
 When a file changed outside Neovim, kunai are found again from the line

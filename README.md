@@ -51,11 +51,12 @@ the picker follows your `vim.g.lazyvim_picker`.
 2. `<leader>ha` places a **named** kunai. It suggests the enclosing function.
 3. `<leader>h1` seals the line as **1**. From anywhere in the project,
    `<leader>1` jumps back to it and `<C-o>` returns you.
-4. `<leader>hf` finds kunai in a picker with preview.
+4. `<leader>hf` finds kunai in a picker (with a preview, except in the
+   `vim.ui.select` fallback).
 5. `<leader>he` opens the manager to rename, reorder or delete kunai in bulk.
 
 Removed something by accident? `<leader>hu` brings it back, even after a
-restart: each project keeps its last 20 deletions.
+restart: each project keeps its last 20 deletions (`undo_history`).
 
 ## Keymaps
 
@@ -71,6 +72,7 @@ turned off (see [Configuration](#configuration)).
 | `<leader>hn` | `:Hiraishin note` | Edit the kunai's note in a float (`:w` saves, `q` closes) |
 | `<leader>hd` | `:Hiraishin delete [name]` | Remove the kunai on this line, or one by name |
 | `<leader>hh` (Visual) | `:'<,'>Hiraishin toggle` | Place a **range** kunai over the selected lines |
+| `<leader>ha` (Visual) | `:'<,'>Hiraishin! add` | Place a named range kunai |
 | `<leader>hu` | `:Hiraishin undo` | Bring back the last removal |
 
 **Seals: quick jumps**
@@ -148,8 +150,10 @@ nvim-web-devicons.
 | `<C-q>` | Send the results to the quickfix list |
 | `<C-l>` | Switch to another list and reopen |
 
-The keys can be changed under `picker.keys`. `vim.ui.select` can only jump,
-and mini.pick opens splits with its own keys.
+The keys can be changed (or turned off with `false`) under `picker.keys`. They
+take precedence over the picker's own keys, such as telescope's `<C-d>`
+preview scroll or mini.pick's `<C-l>` scroll right. `vim.ui.select` can only
+jump, and mini.pick opens splits with its own keys.
 
 ## Manager
 
@@ -208,7 +212,8 @@ precedence for the current session.
 
 - **Signs:** `signs.style` sets the glyphs: `"nerd"` (a Nerd Font bookmark,
   the default), `"ascii"` (`*` and `?`) or `"emoji"` (`⚡` and `!`).
-  `signs.icon` / `signs.stale_icon` override them.
+  `signs.icon`, `signs.stale_icon` and `signs.global_icon` override them.
+  `signs.numhl` also colours the line number; `line_highlight` the line.
 - **Names:** a kunai's name and note icon appear at the end of the line you
   are on (`virt_text.show = "always"` shows them on every line).
 - **Notes:** rest the cursor on a kunai with a note to see it in a float
@@ -235,13 +240,15 @@ sections = { lualine_x = { require("hiraishin.integrations.lualine") } }
 - **which-key:** `<leader>h` is labelled `hiraishin`.
 - **telescope:** `require("telescope").load_extension("hiraishin")`, then
   `:Telescope hiraishin` (also `hiraishin buffer` and `hiraishin all`).
-- **snacks:** `Snacks.picker.hiraishin({ filter = "all" })`.
+- **snacks:** `Snacks.picker.hiraishin({ filter = "all" })` (also after
+  snacks is lazy-loaded).
 - **File managers:** renames in oil.nvim, mini.files, neo-tree and nvim-tree
   are followed. Anything else can call
   `require("hiraishin").rename(from, to)` for files or directories.
 
-`:checkhealth hiraishin` checks storage, config, picker and keymaps, and
-reports stale kunai.
+`:checkhealth hiraishin` checks storage, config (unknown keys included),
+picker and keymaps, and reports stale kunai and store files `:Hiraishin gc`
+could delete.
 
 ## How kunai stay on their line
 

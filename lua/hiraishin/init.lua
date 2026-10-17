@@ -129,15 +129,25 @@ function M.setup(opts)
       tracker.reconcile({ store = path })
     end)
   end
-  -- Snacks.picker.hiraishin(), when snacks is loaded
-  vim.schedule(function()
+  -- Snacks.picker.hiraishin(), when snacks is loaded now or later (lazy.nvim)
+  local function register_snacks()
     local snacks = package.loaded["snacks"]
-    if type(snacks) == "table" and type(rawget(snacks, "picker") or snacks.picker) == "table" then
+    if type(snacks) == "table" and type(snacks.picker) == "table" then
       rawset(snacks.picker, "hiraishin", function(o)
         M.pick(vim.tbl_extend("force", o or {}, { backend = "snacks" }))
       end)
     end
-  end)
+  end
+  vim.schedule(register_snacks)
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "LazyLoad",
+    callback = function(ev)
+      if ev.data == "snacks.nvim" then
+        vim.schedule(register_snacks)
+      end
+    end,
+  })
 
   require("hiraishin.keymaps").setup()
   did_setup = true

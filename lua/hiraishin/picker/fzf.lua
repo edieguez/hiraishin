@@ -25,8 +25,9 @@ function M.lines(entries)
   for _, e in ipairs(entries) do
     local tag = (e.slot and ("[" .. e.slot .. "]") or "[ ]") .. " " .. (e.bookmark.name or "—")
     local rest = e.stale and "(stale)" or vim.trim(e.text)
-    if e.bookmark.note then
-      rest = rest .. "  ✎ " .. e.bookmark.note:gsub("\n", " ⏎ ")
+    local o = require("hiraishin.config").options
+    if e.bookmark.note and o.picker.show_notes then
+      rest = rest .. "  " .. o.virt_text.note_icon .. " " .. e.bookmark.note:gsub("\n", " ⏎ ")
     end
     local line = string.format("%s:%d:%d: %s  %s", e.file, e.line, e.col + 1, tag, rest)
     table.insert(lines, line)

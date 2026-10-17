@@ -42,9 +42,9 @@ M.defaults = {
   name = {
     suggest_from_treesitter = true,
   },
-  note_hover = true,
+  note_hover = true, -- show a kunai's note in a float when the cursor rests on it
   -- draw kunai of the global store in project/branch buffers too
-  global_kunai = true, -- show a kunai's note in a float when the cursor rests on it
+  global_kunai = true,
   jump = {
     reuse_window = true, -- jump to a window already showing the file
     center = true, -- zz after jumping
@@ -114,7 +114,7 @@ local function collect_unknown(defaults, opts, prefix, out)
   for k, v in pairs(opts) do
     local path = prefix .. tostring(k)
     if defaults[k] == nil then
-      -- root.fn and keymaps tables are open by design
+      -- root.fn is open by design; keymaps are checked against the actions
       if not (path == "root.fn") and not vim.startswith(path, "keymaps.") then
         table.insert(out, path)
       end
@@ -211,6 +211,15 @@ function M.setup(opts)
   validate(merged)
   M.unknown = {}
   collect_unknown(M.defaults, opts, "", M.unknown)
+  if type(opts.keymaps) == "table" then
+    local km = require("hiraishin.keymaps")
+    for action in pairs(opts.keymaps) do
+      if not km.defaults[action] and not km.groups[action] then
+        table.insert(M.unknown, "keymaps." .. tostring(action))
+      end
+    end
+    table.sort(M.unknown)
+  end
   if #M.unknown > 0 then
     vim.notify("unknown config keys: " .. table.concat(M.unknown, ", "), vim.log.levels.WARN, { title = "Hiraishin" })
   end
