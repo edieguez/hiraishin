@@ -58,6 +58,12 @@ function M.check()
     )
   end
 
+  if o.stats then
+    health.info("usage stats on (local only): :Hiraishin stats · " .. require("hiraishin.stats").path())
+  else
+    health.info("usage stats off (stats = false)")
+  end
+
   -- config
   if #config.unknown > 0 then
     health.warn("unknown config keys: " .. table.concat(config.unknown, ", "))

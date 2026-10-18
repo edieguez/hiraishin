@@ -265,6 +265,78 @@ T["messages"]["unknown keymap actions are reported"] = function()
   eq(child.lua_get([[require("hiraishin.config").unknown]]), { "keymaps.toogle" })
 end
 
+T["stats"] = MiniTest.new_set()
+
+local function stats()
+  return child.lua_get([[require("hiraishin.stats").data()]])
+end
+
+T["stats"]["are on by default; stats = false writes nothing"] = function()
+  eq(child.lua_get([[require("hiraishin.config").defaults.stats]]), true)
+  setup({ stats = false })
+  main_lua(3)
+  child.cmd("Hiraishin toggle")
+  child.lua([[require("hiraishin.stats").flush()]])
+  eq(stats().actions, {})
+  eq(child.lua_get([[vim.uv.fs_stat(require("hiraishin.stats").path()) == nil]]), true)
+end
+
+T["stats"]["count features, how they were reached, and dead ends"] = function()
+  child.lua([[vim.g.mapleader = " "]])
+  setup({ stats = true })
+  main_lua(3)
+  child.type_keys(" hh") -- key that runs a command: counted once, as a key
+  child.type_keys("m", "0")
+  child.type_keys("g", "0")
+  child.cmd("Hiraishin next list")
+  child.cmd("Hiraishin jump nope")
+  local s = stats()
+  eq(s.actions.toggle.count, 1)
+  eq(s.actions.toggle.via, { ["key:<leader>hh"] = 1 })
+  eq(s.actions.camp.via, { ["key:m0"] = 1 })
+  eq(s.actions.go_camp.count, 1)
+  eq(s.actions.next_list.via, { cmd = 1 })
+  eq(s.actions.jump.via, { cmd = 1 })
+  eq(s.friction["No kunai '…'"].count, 1)
+  -- nothing about files or names is kept
+  local raw = child.lua_get([[vim.json.encode(require("hiraishin.stats").data())]])
+  eq(raw:find("main.lua", 1, true), nil)
+  eq(raw:find("nope", 1, true), nil)
+end
+
+T["stats"]["survive flushes and add up across instances"] = function()
+  setup({ stats = true })
+  main_lua(3)
+  child.cmd("Hiraishin toggle")
+  child.lua([[require("hiraishin.stats").flush()]])
+  -- another Neovim wrote meanwhile
+  child.lua([[local p = require("hiraishin.stats").path()
+    local d = vim.json.decode(table.concat(vim.fn.readfile(p), "\n"))
+    d.actions.toggle.count = d.actions.toggle.count + 5
+    vim.fn.writefile({ vim.json.encode(d) }, p)]])
+  child.cmd("Hiraishin toggle")
+  child.lua([[require("hiraishin.stats").flush()]])
+  eq(stats().actions.toggle.count, 7)
+end
+
+T["stats"]["the report ranks features and lists the unused ones"] = function()
+  setup({ stats = true })
+  main_lua(3)
+  child.cmd("Hiraishin toggle")
+  child.cmd("Hiraishin toggle")
+  child.cmd("Hiraishin seal 2")
+  child.cmd("Hiraishin stats")
+  local lines = child.api.nvim_buf_get_lines(0, 0, -1, false)
+  local text = table.concat(lines, "\n")
+  eq(text:match("toggle%s+2%s+2%s+today%s+cmd 2") ~= nil, true)
+  eq(text:match("seal%s+1%s+1") ~= nil, true)
+  eq(text:find("Never used:", 1, true) ~= nil, true)
+  child.type_keys("q")
+  child.lua([[vim.fn.confirm = function() return 1 end]])
+  child.cmd("Hiraishin stats reset")
+  eq(stats().actions, {})
+end
+
 T["docs"] = MiniTest.new_set()
 
 -- the defaults table printed in a doc, evaluated

@@ -3,6 +3,13 @@
 Versions are git tags (`git checkout v0.6.0`). Dates are when the version
 was tagged.
 
+## v0.11.0 — 2026-10-17
+
+- Local usage stats: which features you use, how you reach them and the dead
+  ends you hit; `:Hiraishin stats` shows the report, `:Hiraishin stats reset`
+  forgets it, `stats = false` turns counting off. Kept in `stats.json` next
+  to the stores; nothing identifying, nothing sent anywhere
+
 ## v0.10.1 — 2026-10-17
 
 - Fix: `m0`, `mm` and `m1`…`m9` only worked when typed faster than

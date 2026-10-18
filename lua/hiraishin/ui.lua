@@ -30,6 +30,7 @@ end
 ---@param msg string
 function M.warn(msg)
   remember(msg, vim.log.levels.WARN)
+  require("hiraishin.stats").friction(msg)
   vim.notify(msg, vim.log.levels.WARN, { title = "Hiraishin" })
 end
 

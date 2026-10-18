@@ -120,7 +120,16 @@ function M.setup(opts)
   })
   vim.api.nvim_create_autocmd("VimLeavePre", {
     group = group,
-    callback = store.flush,
+    callback = function()
+      store.flush()
+      require("hiraishin.stats").flush()
+    end,
+  })
+  vim.api.nvim_create_autocmd("FocusLost", {
+    group = group,
+    callback = function()
+      require("hiraishin.stats").flush()
+    end,
   })
   require("hiraishin.integrations.rename").setup(group)
   -- another Neovim changed the same store: redraw with the merged result
@@ -686,6 +695,7 @@ function M.to_quickfix(opts)
   local entries, ctx = picker.entries({ filter = opts.all and "all" or nil })
   local data = store.get(ctx)
   picker.actions.quickfix(entries, {
+    counted = true, -- the command or key already counted it
     loclist = opts.loclist,
     open = opts.open,
     title = "Hiraishin: " .. (opts.all and "all lists" or data.active_list),

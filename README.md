@@ -291,6 +291,20 @@ sections = { lualine_x = { require("hiraishin.integrations.lualine") } }
   are followed. Anything else can call
   `require("hiraishin").rename(from, to)` for files or directories.
 
+### Usage stats
+
+Hiraishin counts, locally, which features you use and how you reach them
+(which key, a command, the picker, the menu or the manager), plus the dead
+ends you run into ("Seal N is empty", "No kunai on this line"), so you can
+see what you actually use and what gets in your way. Only feature names,
+counts and days are kept, in `stdpath("data")/hiraishin/stats.json`: no file
+names, code or kunai names, and nothing is sent anywhere.
+
+`:Hiraishin stats` shows the report: features ranked by use over the last 30
+days and all time, the keys used for each, the features you never used, and
+the most common dead ends. `:Hiraishin stats reset` forgets everything, and
+`stats = false` stops counting.
+
 `:checkhealth hiraishin` checks storage, config (unknown keys included),
 picker and keymaps, and reports stale kunai and store files `:Hiraishin gc`
 could delete.
@@ -382,6 +396,7 @@ require("hiraishin").setup({
   messages = "echo",              -- "echo" | "notify" | "silent"
   confirm_remove_named = false,   -- removals can be undone instead
   keymaps = true,                 -- false disables all, or override per action
+  stats = true,                   -- count feature use locally (:Hiraishin stats)
 })
 ```
 

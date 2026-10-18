@@ -192,6 +192,23 @@ M.subcommands = {
       return { "1", "2", "3", "4", "5", "6", "7", "8", "9", "clear" }
     end,
   },
+  stats = {
+    -- :Hiraishin stats [reset]   local usage stats
+    run = function(args)
+      local stats = require("hiraishin.stats")
+      if args[1] == "reset" then
+        if vim.fn.confirm("Forget all hiraishin usage stats?", "&Forget\n&Cancel", 2) == 1 then
+          stats.reset()
+          ui.info("Usage stats forgotten")
+        end
+        return
+      end
+      stats.show()
+    end,
+    complete = function()
+      return { "reset" }
+    end,
+  },
   camp = {
     -- :Hiraishin camp [go|clear]   make this line the camp / go there / remove it
     run = function(args)
@@ -512,6 +529,28 @@ function M.choose_list(on_done)
   end)
 end
 
+---The feature a command counts as in the stats ("next list" -> next_list).
+---@param name string
+---@param args string[]
+---@return string
+function M.feature(name, args)
+  local a = args[1]
+  if (name == "next" or name == "prev") and (a == "list" or a == "seal") then
+    return name .. "_" .. a
+  elseif name == "pick" and a then
+    return "pick_" .. a
+  elseif name == "seal" then
+    return a == nil and "seal_free" or a == "clear" and "seal_clear" or "seal"
+  elseif name == "camp" then
+    return a == "go" and "go_camp" or a == "clear" and "camp_clear" or "camp"
+  elseif name == "list" and a == "delete" then
+    return "list_delete"
+  elseif name == "manager" and a == "global" then
+    return "manager_global"
+  end
+  return name
+end
+
 ---@param cmd { fargs: string[], bang: boolean, range?: integer, line1?: integer, line2?: integer }
 function M.run(cmd)
   local name = cmd.fargs[1]
@@ -523,7 +562,11 @@ function M.run(cmd)
   if not sub then
     return ui.warn("Unknown subcommand: " .. name)
   end
-  sub.run(vim.list_slice(cmd.fargs, 2), cmd.bang, cmd)
+  local args = vim.list_slice(cmd.fargs, 2)
+  if name ~= "stats" then
+    require("hiraishin.stats").command(M.feature(name, args))
+  end
+  sub.run(args, cmd.bang, cmd)
 end
 
 ---@return string[]

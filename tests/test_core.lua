@@ -229,6 +229,7 @@ T["commands"]["completes subcommands and names"] = function()
     "scope",
     "seal",
     "seals",
+    "stats",
     "toggle",
     "undo",
   })
@@ -284,8 +285,8 @@ T["keymaps"]["sets defaults without clobbering existing maps"] = function()
     vim.keymap.set("n", "<leader>hd", "<cmd>echo 'mine'<cr>")
     require("hiraishin").setup({ storage = { dir = T.storage } })
   ]])
-  eq(child.lua_get([[vim.fn.maparg("<leader>hh", "n")]]), "<Cmd>Hiraishin toggle<CR>")
-  eq(child.lua_get([[vim.fn.maparg("<leader>ha", "n")]]), "<Cmd>Hiraishin! add<CR>")
+  eq(child.lua_get([[vim.fn.maparg("<leader>hh", "n", false, true).desc]]), "hiraishin: Toggle kunai")
+  eq(child.lua_get([[vim.fn.maparg("<leader>ha", "n", false, true).desc]]), "hiraishin: Place / rename named kunai")
   eq(child.lua_get([[vim.fn.maparg("<leader>hd", "n")]]), "<Cmd>echo 'mine'<CR>")
 end
 
@@ -304,7 +305,7 @@ T["keymaps"]["can be overridden or disabled"] = function()
     vim.g.mapleader = " "
     require("hiraishin").setup({ storage = { dir = T.storage }, keymaps = { toggle = "<leader>bb", add = false } })
   ]])
-  eq(child.lua_get([[vim.fn.maparg("<leader>bb", "n")]]), "<Cmd>Hiraishin toggle<CR>")
+  eq(child.lua_get([[vim.fn.maparg("<leader>bb", "n", false, true).desc]]), "hiraishin: Toggle kunai")
   eq(child.lua_get([[vim.fn.maparg("<leader>ha", "n")]]), "")
   child.lua([[require("hiraishin").setup({ storage = { dir = T.storage }, keymaps = false })]])
   eq(child.lua_get([[vim.fn.maparg("<leader>bb", "n")]]), "")

@@ -93,6 +93,7 @@ local function close(menu)
 end
 
 local function go(menu, n)
+  require("hiraishin.stats").record("menu_go", "menu")
   local e = menu.rows[n]
   if not e then
     return ui.info(n == 0 and "No camp yet" or string.format("Seal %d is empty", n))
@@ -109,6 +110,7 @@ local function go(menu, n)
 end
 
 local function clear(menu, n)
+  require("hiraishin.stats").record("menu_clear", "menu")
   local e = menu.rows[n]
   if not e then
     return

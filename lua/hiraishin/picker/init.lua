@@ -206,6 +206,7 @@ M.actions = {}
 ---@param split? "vsplit"|"split"|"tab"
 ---@param win? integer open in this window (backends with a target window)
 function M.actions.jump(ctx, e, split, win)
+  require("hiraishin.stats").record("picker_jump", "picker")
   local bm = lookup(ctx, e)
   if not bm then
     return util.notify("Kunai no longer exists", vim.log.levels.WARN)
@@ -220,6 +221,7 @@ function M.actions.jump(ctx, e, split, win)
 end
 
 function M.actions.delete(ctx, e)
+  require("hiraishin.stats").record("picker_delete", "picker")
   local bm, list = lookup(ctx, e)
   if not bm then
     return
@@ -234,6 +236,7 @@ end
 
 ---@param done? fun() called after the name was changed (or the prompt cancelled)
 function M.actions.rename(ctx, e, done)
+  require("hiraishin.stats").record("picker_rename", "picker")
   local bm, list = lookup(ctx, e)
   if not bm then
     return done and done()
@@ -259,6 +262,7 @@ function M.actions.rename(ctx, e, done)
 end
 
 function M.actions.note(ctx, e)
+  require("hiraishin.stats").record("picker_note", "picker")
   local bm = lookup(ctx, e)
   if bm then
     require("hiraishin.note").edit({ id = bm.id, list = e.list, ctx = ctx })
@@ -268,6 +272,9 @@ end
 ---@param entries hiraishin.Entry[]
 ---@param opts? { loclist?: boolean, title?: string, open?: boolean }
 function M.actions.quickfix(entries, opts)
+  if not (opts and opts.counted) then
+    require("hiraishin.stats").record("picker_quickfix", "picker")
+  end
   opts = opts or {}
   local items = {}
   for _, e in ipairs(entries) do
@@ -376,6 +383,7 @@ function M.open(opts)
     keys = config.options.picker.keys,
     -- choose another list, then reopen on it (all-lists pickers just reopen)
     switch_list = function()
+      require("hiraishin.stats").record("picker_list", "picker")
       require("hiraishin.commands").choose_list(function()
         M.open(opts)
       end)

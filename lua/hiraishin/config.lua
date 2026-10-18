@@ -84,6 +84,8 @@ M.defaults = {
   confirm_remove_named = false,
   -- false disables all default keymaps; a table overrides per action
   keymaps = true,
+  -- count which features you use, locally (:Hiraishin stats); nothing is sent anywhere
+  stats = true,
 }
 
 M.options = vim.deepcopy(M.defaults)
@@ -204,6 +206,7 @@ local function validate(o)
     error("hiraishin: messages: expected 'echo', 'notify' or 'silent'", 0)
   end
   check("keymaps", o.keymaps, { "boolean", "table" })
+  check("stats", o.stats, "boolean")
 end
 
 ---@param opts? table

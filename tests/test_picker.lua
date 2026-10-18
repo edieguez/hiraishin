@@ -408,9 +408,9 @@ end
 
 T["keymaps"] = function()
   child.lua([[vim.g.mapleader = " "; require("hiraishin").setup({ storage = { dir = T.storage } })]])
-  eq(child.lua_get([[vim.fn.maparg("<leader>hf", "n")]]), "<Cmd>Hiraishin pick<CR>")
-  eq(child.lua_get([[vim.fn.maparg("<leader>hF", "n")]]), "<Cmd>Hiraishin pick all<CR>")
-  eq(child.lua_get([[vim.fn.maparg("<leader>hq", "n")]]), "<Cmd>Hiraishin quickfix<CR>")
+  eq(child.lua_get([[vim.fn.maparg("<leader>hf", "n", false, true).desc]]), "hiraishin: Find kunai")
+  eq(child.lua_get([[vim.fn.maparg("<leader>hF", "n", false, true).desc]]), "hiraishin: Find kunai (all lists)")
+  eq(child.lua_get([[vim.fn.maparg("<leader>hq", "n", false, true).desc]]), "hiraishin: Kunai to quickfix")
 end
 
 T["polish"] = MiniTest.new_set()

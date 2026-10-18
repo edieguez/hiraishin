@@ -307,6 +307,7 @@ function M.camp()
     end
     local target = away
     away = nil
+    require("hiraishin.stats").record("camp_back", "go_camp")
     vim.cmd("normal! m'")
     local win, err = open(target.abs, nil, false)
     if not win then

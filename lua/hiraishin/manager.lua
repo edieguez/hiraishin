@@ -271,6 +271,7 @@ end
 ---@param state hiraishin.ManagerState
 ---@return boolean applied
 function M.apply(state)
+  require("hiraishin.stats").record("manager_apply", "manager")
   local data = store.get(state.ctx)
   local list = data.lists[state.list]
   if not list then

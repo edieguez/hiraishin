@@ -239,9 +239,9 @@ end
 
 T["keymaps"] = function()
   child.lua([[vim.g.mapleader = " "; require("hiraishin").setup({ storage = { dir = T.storage } })]])
-  eq(child.lua_get([[vim.fn.maparg("<leader>he", "n")]]), "<Cmd>Hiraishin manager<CR>")
-  eq(child.lua_get([[vim.fn.maparg("<leader>hl", "n")]]), "<Cmd>Hiraishin list<CR>")
-  eq(child.lua_get([[vim.fn.maparg("<leader>hu", "n")]]), "<Cmd>Hiraishin undo<CR>")
+  eq(child.lua_get([[vim.fn.maparg("<leader>he", "n", false, true).desc]]), "hiraishin: Edit kunai (manager)")
+  eq(child.lua_get([[vim.fn.maparg("<leader>hl", "n", false, true).desc]]), "hiraishin: Switch kunai list")
+  eq(child.lua_get([[vim.fn.maparg("<leader>hu", "n", false, true).desc]]), "hiraishin: Undo kunai deletion")
 end
 
 T["help file builds tags for every command"] = function()

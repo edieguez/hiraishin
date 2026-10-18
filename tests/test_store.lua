@@ -41,7 +41,7 @@ T["config"]["works with lazy.nvim style opts = {}"] = function()
   child.restart({ "-u", "scripts/minimal_init.lua" })
   child.lua([[require("hiraishin").setup({})]])
   eq(child.lua_get([[vim.fn.exists(":Hiraishin")]]), 2)
-  eq(child.lua_get([[vim.fn.maparg("\\hh", "n")]]), "<Cmd>Hiraishin toggle<CR>")
+  eq(child.lua_get([[vim.fn.maparg("\\hh", "n", false, true).desc]]), "hiraishin: Toggle kunai")
 end
 
 T["config"]["replaces lists instead of merging them by index"] = function()

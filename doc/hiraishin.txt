@@ -199,6 +199,15 @@ All commands are subcommands of `:Hiraishin`, with completion.
     Stores open in this Neovim are kept. |:checkhealth| reports how many
     there are.
 
+:Hiraishin stats [reset]                                   *:Hiraishin-stats*
+    Hiraishin counts locally which features you use, how you reached them
+    (key, command, picker, menu, manager) and the dead ends you hit. Only
+    feature names, counts and days are kept, in `storage.dir`/stats.json;
+    no file names or code, and nothing is sent anywhere. Shows the report:
+    features by use (30 days, all time), keys used, features never used,
+    most common dead ends. "reset" forgets it; `stats = false` stops
+    counting.
+
 :Hiraishin import marks                                    *:Hiraishin-import*
     Turn global marks A-Z into kunai named "mark A", ...
 
@@ -390,6 +399,7 @@ Defaults: >lua
       messages = "echo",          -- "echo" | "notify" | "silent"
       confirm_remove_named = false, *hiraishin-confirm_remove_named*
       keymaps = true,
+      stats = true,               -- local usage stats (|:Hiraishin-stats|)
     })
 <
 ==============================================================================

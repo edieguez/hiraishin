@@ -13,6 +13,7 @@ local function report(_, err)
     return
   end
   local ui = require("hiraishin.ui")
+  require("hiraishin.stats").friction(err)
   if err:match("^File not found") or err:match("^Not a file") or err:match("^Buffer has no") then
     ui.warn(err)
   else
@@ -229,8 +230,45 @@ local function clear()
   m_keys = {}
 end
 
+-- the feature a keymap action counts as in the stats
+local FEATURE = { go_camp_alt = "go_camp" }
+local function feature_of(action)
+  if not action then
+    return "other"
+  end
+  if action:match("^assign_slot_") then
+    return "seal"
+  elseif action:match("^jump_slot_") then
+    return "jump"
+  end
+  return FEATURE[action] or action
+end
+
+---With stats on, a mapping counts its use (and the key that was pressed).
+local function counted(rhs, action, lhs)
+  local stats = require("hiraishin.stats")
+  if not stats.enabled() then
+    return rhs
+  end
+  local run = rhs
+  if type(rhs) == "string" then
+    local cmd = rhs:match("^<[Cc][Mm][Dd]>(.*)<[Cc][Rr]>$")
+    run = cmd and function()
+      vim.cmd(cmd)
+    end or function()
+      vim.api.nvim_feedkeys(vim.keycode(rhs), "m", false)
+    end
+  end
+  return function()
+    stats.as(feature_of(action), "key:" .. lhs, run)
+  end
+end
+
 local function set(lhs, rhs, desc, forced, action, mode)
   mode = mode or "n"
+  if mode == "n" then
+    rhs = counted(rhs, action, lhs)
+  end
   if mode == "n" and lhs:match("^m.$") then
     -- served by the waiting `m` key (see m_dispatch)
     if forced or is_free(lhs, mode) then
