@@ -17,6 +17,8 @@ end
 ---@param msg string
 function M.info(msg)
   remember(msg, vim.log.levels.INFO)
+  -- routine feedback that means "that didn't work" counts as a dead end
+  require("hiraishin.stats").friction(msg, true)
   local o = require("hiraishin.config").options.messages
   if o == "silent" then
     return

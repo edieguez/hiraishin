@@ -376,6 +376,7 @@ function M.open(opts)
     )
   end
   local backend = M.backend(opts.backend)
+  require("hiraishin.stats").ui_open("picker")
   backend.open({
     entries = entries,
     ctx = ctx,

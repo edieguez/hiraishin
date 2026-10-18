@@ -432,6 +432,7 @@ local function jump_cursor(state)
   if not bm then
     return
   end
+  require("hiraishin.stats").record("manager_jump", "manager")
   close(state, true)
   local _, err = require("hiraishin.nav").jump(state.ctx, bm, state.list)
   if err then
@@ -467,6 +468,7 @@ function M.open(opts)
     close(current, true)
   end
   local ctx = opts.global and scope.global_ctx() or scope.resolve(0)
+  require("hiraishin.stats").ui_open("manager")
   local data = store.get(ctx)
   local o = config.options.manager
 

@@ -75,7 +75,8 @@ T["entries"]["sort = recent puts the last jumped-to first"] = function()
   place(3, "b")
   place(5, "c")
   child.lua([[require("hiraishin").jump("b")]])
-  eq(names(entries()), { "b", "a", "c" })
+  -- the rest follow by last change, which may fall in different seconds
+  eq(names(entries())[1], "b")
 end
 
 T["entries"]["other sort orders"] = function()

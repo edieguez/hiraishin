@@ -13,7 +13,6 @@ local function report(_, err)
     return
   end
   local ui = require("hiraishin.ui")
-  require("hiraishin.stats").friction(err)
   if err:match("^File not found") or err:match("^Not a file") or err:match("^Buffer has no") then
     ui.warn(err)
   else

@@ -3,6 +3,24 @@
 Versions are git tags (`git checkout v0.6.0`). Dates are when the version
 was tagged.
 
+## v0.12.0 — 2026-10-18
+
+The stats report now does the triage for you.
+
+- Features grouped by area, with readable names, their key, a usage bar and
+  a 14-day sparkline; the never-used ones grouped by area with their keys
+- Suggestions: a key for a command you keep typing, an unused second key
+  (`<BS>` vs `g0`), the way out of your most common dead end, a window you
+  keep closing without acting, an action you keep retrying
+- New signals: dead ends tied to the action that hit them, retries (same
+  action at the same spot within 2 s), and the picker, seal menu and manager
+  opened and left without acting
+- Interactive: `<CR>` opens the help for the feature, `t` 30 days / all
+  time, `u` folds the never-used list
+- Message templates never keep what follows a colon, so a "File not found"
+  path is not stored
+- `HiraishinStatsBar`, `HiraishinStatsSpark`, `HiraishinStatsKey` highlights
+
 ## v0.11.0 — 2026-10-17
 
 - Local usage stats: which features you use, how you reach them and the dead

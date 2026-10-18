@@ -563,10 +563,13 @@ function M.run(cmd)
     return ui.warn("Unknown subcommand: " .. name)
   end
   local args = vim.list_slice(cmd.fargs, 2)
-  if name ~= "stats" then
-    require("hiraishin.stats").command(M.feature(name, args))
+  if name == "stats" then
+    return sub.run(args, cmd.bang, cmd)
   end
-  sub.run(args, cmd.bang, cmd)
+  -- counted once (a key that runs this command already counted it)
+  require("hiraishin.stats").as(M.feature(name, args), "cmd", function()
+    sub.run(args, cmd.bang, cmd)
+  end)
 end
 
 ---@return string[]

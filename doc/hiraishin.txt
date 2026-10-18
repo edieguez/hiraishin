@@ -200,12 +200,25 @@ All commands are subcommands of `:Hiraishin`, with completion.
     there are.
 
 :Hiraishin stats [reset]                                   *:Hiraishin-stats*
-    Hiraishin counts locally which features you use, how you reached them
-    (key, command, picker, menu, manager) and the dead ends you hit. Only
-    feature names, counts and days are kept, in `storage.dir`/stats.json;
-    no file names or code, and nothing is sent anywhere. Shows the report:
-    features by use (30 days, all time), keys used, features never used,
-    most common dead ends. "reset" forgets it; `stats = false` stops
+                                                             *hiraishin-stats*
+    Local usage stats, to see what you use and what gets in your way. The
+    report shows:
+    - features by area, with their key, a bar for how much you use them,
+      the last 14 days as a sparkline and the other ways you reached them
+    - the features you never used, grouped by area, with their keys
+    - suggestions: a key for a command you keep typing, a second key you
+      never press, the way out of a dead end you hit often, a window you
+      keep closing without acting, an action you keep retrying
+    - dead ends: messages that meant it didn't work, with the action that
+      hit them
+    - hesitation: the same action again at the same spot within 2 seconds,
+      and how often the picker, seal menu and manager closed unused
+    Keys: <CR> help for the feature under the cursor, t last 30 days / all
+    time, u fold the never-used list, q close.
+
+    Only feature names, counts, days and message templates are kept, in
+    `storage.dir`/stats.json; no file names, code or kunai names, and
+    nothing is sent anywhere. "reset" forgets it; `stats = false` stops
     counting.
 
 :Hiraishin import marks                                    *:Hiraishin-import*
@@ -497,5 +510,8 @@ All link to standard groups and can be overridden:
   HiraishinManagerHeader manager head  -> Title
   HiraishinTitle         message title -> Title
   HiraishinStatus        statusline    -> HiraishinSign
+  HiraishinStatsBar      stats bars    -> DiagnosticInfo
+  HiraishinStatsSpark    stats trend   -> DiagnosticHint
+  HiraishinStatsKey      stats keys    -> Special
 
  vim:tw=78:ts=8:ft=help:norl:

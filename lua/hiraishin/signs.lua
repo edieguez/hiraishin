@@ -70,6 +70,9 @@ function M.setup_highlights()
     HiraishinStatus = "HiraishinSign",
     HiraishinTitle = "Title",
     HiraishinFlash = "IncSearch",
+    HiraishinStatsBar = "DiagnosticInfo",
+    HiraishinStatsSpark = "DiagnosticHint",
+    HiraishinStatsKey = "Special",
   }
   for group, target in pairs(links) do
     vim.api.nvim_set_hl(0, group, { link = target, default = true })

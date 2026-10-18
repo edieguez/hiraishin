@@ -271,8 +271,9 @@ Highlight groups, each linked to a default you can override:
 `HiraishinSign`, `HiraishinSignSlot`, `HiraishinSignStale`,
 `HiraishinSignGlobal`, `HiraishinSignRange`, `HiraishinSignCamp`, `HiraishinLine`,
 `HiraishinVirtText`, `HiraishinFlash`, `HiraishinStatus`,
-`HiraishinManagerSlot`, `HiraishinManagerPath`, `HiraishinManagerSep` and
-`HiraishinManagerHeader`.
+`HiraishinManagerSlot`, `HiraishinManagerPath`, `HiraishinManagerSep`,
+`HiraishinManagerHeader`, `HiraishinStatsBar`, `HiraishinStatsSpark` and
+`HiraishinStatsKey`.
 
 ## Integrations
 
@@ -293,17 +294,46 @@ sections = { lualine_x = { require("hiraishin.integrations.lualine") } }
 
 ### Usage stats
 
-Hiraishin counts, locally, which features you use and how you reach them
-(which key, a command, the picker, the menu or the manager), plus the dead
-ends you run into ("Seal N is empty", "No kunai on this line"), so you can
-see what you actually use and what gets in your way. Only feature names,
-counts and days are kept, in `stdpath("data")/hiraishin/stats.json`: no file
-names, code or kunai names, and nothing is sent anywhere.
+Hiraishin keeps local usage stats so you can see what you actually use and
+what gets in your way. `:Hiraishin stats` opens the report:
 
-`:Hiraishin stats` shows the report: features ranked by use over the last 30
-days and all time, the keys used for each, the features you never used, and
-the most common dead ends. `:Hiraishin stats reset` forgets everything, and
-`stats = false` stops counting.
+```
+Hiraishin usage · last 30 days · 214 uses
+                          Key                        30 days  Last 14 days    Ways
+Seals
+  Go to seal or name      g1…g9        ████████████       96  ▂▅▇▆·▃▅█▆▄··▅▇  g1…g9 92 · cmd 4
+  Seal this line          m1…m9        ███▍               27  ▁▂▂▁·▁▂▃▂▁··▂▂
+Camp
+  Go to camp              g0 <BS>      ██▋                21  ···▂▄▅▃▂▄▃··▄▅
+...
+Suggestions
+  • "Seal N is empty" 14 times, mostly from Go to seal or name (`g1…g9`).
+    `g<Space>` shows which seals are set.
+  • Go to camp: g0 21, <BS> 0. `keymaps = { go_camp_alt = false }` gives `<BS>`
+    back to Vim.
+```
+
+- **Features by area** with their key, a bar for how much you use them, the
+  last 14 days as a sparkline, and the other ways you reached them.
+- **Never used:** the rest, grouped by area, with their keys.
+- **Suggestions** from the numbers: a key for a command you keep typing, a
+  second key you never press, a way out of the dead end you hit most, a
+  window you keep opening and closing without acting, an action you keep
+  retrying.
+- **Dead ends:** messages that meant it didn't work ("Seal N is empty", "No
+  kunai below"), with the action that hit them.
+- **Hesitation:** the same action again at the same spot within 2 seconds,
+  and how often the picker, the seal menu and the manager were closed
+  without doing anything.
+
+In the report, `<CR>` opens the help for the feature under the cursor, `t`
+switches between the last 30 days and all time, `u` folds the never-used
+list and `q` closes.
+
+Only feature names, counts, days and message templates are kept, in
+`stdpath("data")/hiraishin/stats.json`: no file names, code or kunai names,
+and nothing is sent anywhere. `:Hiraishin stats reset` forgets everything,
+and `stats = false` stops counting.
 
 `:checkhealth hiraishin` checks storage, config (unknown keys included),
 picker and keymaps, and reports stale kunai and store files `:Hiraishin gc`

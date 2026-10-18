@@ -319,22 +319,193 @@ T["stats"]["survive flushes and add up across instances"] = function()
   eq(stats().actions.toggle.count, 7)
 end
 
-T["stats"]["the report ranks features and lists the unused ones"] = function()
+T["stats"]["the report groups features with their keys, bars and trend"] = function()
+  child.lua([[vim.g.mapleader = " "; vim.o.columns = 120; vim.o.lines = 60]])
   setup({ stats = true })
   main_lua(3)
-  child.cmd("Hiraishin toggle")
-  child.cmd("Hiraishin toggle")
+  child.type_keys(" hh")
+  child.type_keys(" hh")
   child.cmd("Hiraishin seal 2")
   child.cmd("Hiraishin stats")
-  local lines = child.api.nvim_buf_get_lines(0, 0, -1, false)
-  local text = table.concat(lines, "\n")
-  eq(text:match("toggle%s+2%s+2%s+today%s+cmd 2") ~= nil, true)
-  eq(text:match("seal%s+1%s+1") ~= nil, true)
-  eq(text:find("Never used:", 1, true) ~= nil, true)
+  local text = table.concat(child.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
+  eq(text:find("Hiraishin usage · last 30 days · 3 uses", 1, true) ~= nil, true)
+  eq(
+    text:match(
+      "\nPlacing\n  Place / remove kunai%s+<leader>hh%s+████████████%s+2  ·············█"
+    ) ~= nil,
+    true
+  )
+  eq(
+    text:match("\nSeals\n  Seal this line%s+m1…m9%s+██████%s+1  ·············█") ~= nil,
+    true
+  )
+  -- never used, grouped by area, with keys
+  eq(text:match("\nNever used\n") ~= nil, true)
+  eq(text:match("  Camp%s+Set camp m0 · Go to camp g0 <BS>") ~= nil, true)
+  -- t: all time, u: fold the unused
+  child.type_keys("t")
+  eq(
+    child.api.nvim_buf_get_lines(0, 0, 1, false)[1]:match("^Hiraishin usage · since %d+%-%d+%-%d+ · 3 uses$") ~= nil,
+    true
+  )
+  child.type_keys("u")
+  text = table.concat(child.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
+  eq(text:match("Never used: %d+ features  · u shows them") ~= nil, true)
   child.type_keys("q")
   child.lua([[vim.fn.confirm = function() return 1 end]])
   child.cmd("Hiraishin stats reset")
   eq(stats().actions, {})
+end
+
+T["stats"]["<CR> opens the help of the feature under the cursor"] = function()
+  child.lua([[
+    local dir = T.tmp .. "/rtp/doc"
+    vim.fn.mkdir(dir, "p")
+    local repo = HIRAISHIN_DEPS:gsub("/deps$", "")
+    vim.fn.writefile(vim.fn.readfile(repo .. "/doc/hiraishin.txt"), dir .. "/hiraishin.txt")
+    vim.cmd("helptags " .. dir)
+    vim.opt.rtp:prepend(T.tmp .. "/rtp")
+    vim.o.lines = 60
+  ]])
+  setup({ stats = true })
+  main_lua(3)
+  child.cmd("Hiraishin camp")
+  child.cmd("Hiraishin stats")
+  local lines = child.api.nvim_buf_get_lines(0, 0, -1, false)
+  for i, l in ipairs(lines) do
+    if l:match("^  Set camp") then
+      child.api.nvim_win_set_cursor(0, { i, 0 })
+    end
+  end
+  child.type_keys("<CR>")
+  eq(child.lua_get("vim.bo.buftype"), "help")
+  eq(child.api.nvim_get_current_line():find("*:Hiraishin-camp*", 1, true) ~= nil, true)
+end
+
+T["stats"]["suggest keys for typed commands and a way out of dead ends"] = function()
+  child.lua([[vim.g.mapleader = " "]])
+  setup({ stats = true })
+  main_lua(3)
+  for _ = 1, 3 do
+    child.cmd("Hiraishin next list")
+  end
+  for n = 4, 6 do
+    child.type_keys("g", tostring(n)) -- empty seals
+  end
+  local sugg = child.lua_get([[vim.tbl_map(function(s) return s.text end,
+    require("hiraishin.stats").suggestions(require("hiraishin.stats").data()))]])
+  local text = table.concat(sugg, "\n")
+  eq(text:find("You ran `:Hiraishin next list` 3 times by command; `]K` does the same.", 1, true) ~= nil, true)
+  eq(
+    text:find(
+      '"Seal N is empty" 3 times, mostly from Go to seal or name (`g1…g9`). `g<Space>` shows which seals are set.',
+      1,
+      true
+    ) ~= nil,
+    true
+  )
+end
+
+T["stats"]["notice an unused second key and windows left without acting"] = function()
+  setup({ stats = true })
+  main_lua(3)
+  child.cmd("Hiraishin camp")
+  for _ = 1, 10 do
+    child.type_keys("g", "0") -- at camp: "You are at camp", still a use of g0
+  end
+  for _ = 1, 5 do
+    child.cmd("Hiraishin seals")
+    child.type_keys("q")
+  end
+  child.cmd("Hiraishin seals")
+  child.type_keys("0") -- went to camp from the menu: acted
+  local d = stats()
+  eq(d.uis.seal_menu, { opened = 6, acted = 1 })
+  local text = table.concat(
+    child.lua_get([[vim.tbl_map(function(s) return s.text end,
+      require("hiraishin.stats").suggestions(require("hiraishin.stats").data()))]]),
+    "\n"
+  )
+  eq(
+    text:find("Go to camp: g0 10, <BS> 0. `keymaps = { go_camp_alt = false }` gives `<BS>` back to Vim.", 1, true)
+      ~= nil,
+    true
+  )
+  eq(text:find("You left the seal menu without doing anything 5 of 6 times.", 1, true) ~= nil, true)
+end
+
+T["stats"]["count a retry at the same spot, not stepping or moving on"] = function()
+  setup({ stats = true })
+  main_lua(3)
+  child.cmd("Hiraishin seal 5")
+  child.cmd("Hiraishin seal 5") -- same spot, right away: a retry
+  child.api.nvim_win_set_cursor(0, { 5, 0 })
+  child.cmd("Hiraishin seal 6") -- another line: not a retry
+  child.cmd("Hiraishin next")
+  child.cmd("Hiraishin next") -- stepping is meant to repeat
+  local d = stats()
+  eq(d.actions.seal.repeats, 1)
+  eq(d.actions.next.repeats, 0)
+end
+
+T["stats"]["tie dead ends to their action and never keep a file name"] = function()
+  setup({ stats = true })
+  main_lua(3)
+  child.lua([[require("hiraishin.ui").warn("File not found: src/secret/plan.lua")]])
+  child.cmd("Hiraishin jump 7")
+  child.lua([[require("hiraishin.ui").info("Kunai placed")]]) -- routine, not a dead end
+  local d = stats()
+  eq(d.friction["File not found: …"].count, 1)
+  eq(d.friction["Seal N is empty"].by, { jump = 1 })
+  eq(d.friction["Kunai placed"], nil)
+  eq(child.lua_get([[vim.json.encode(require("hiraishin.stats").data())]]):find("secret", 1, true), nil)
+end
+
+T["stats"]["every command, key and help tag belongs to a feature"] = function()
+  child.lua([[
+    local dir = T.tmp .. "/doc"
+    vim.fn.mkdir(dir, "p")
+    local repo = HIRAISHIN_DEPS:gsub("/deps$", "")
+    vim.fn.writefile(vim.fn.readfile(repo .. "/doc/hiraishin.txt"), dir .. "/hiraishin.txt")
+    vim.cmd("helptags " .. dir)
+  ]])
+  local problems = child.lua_get([[(function()
+    local stats, cmds = require("hiraishin.stats"), require("hiraishin.commands")
+    local tags = table.concat(vim.fn.readfile(T.tmp .. "/doc/tags"), "\n")
+    local out = {}
+    for name in pairs(cmds.subcommands) do
+      if name ~= "stats" and not stats.by_id[cmds.feature(name, {})] then
+        table.insert(out, "command " .. name)
+      end
+    end
+    local reached = {}
+    for _, f in ipairs(stats.CATALOG) do
+      for _, a in ipairs(f.actions or {}) do
+        reached[a] = true
+      end
+      for _, a in ipairs({ f.action or false, f.group or false }) do
+        if a then
+          reached[a] = true
+        end
+      end
+      if f.help and not tags:find(vim.pesc(f.help) .. "\t") then
+        table.insert(out, "help " .. f.help)
+      end
+    end
+    for action in pairs(require("hiraishin.keymaps").defaults) do
+      if not reached[action] then
+        table.insert(out, "keymap " .. action)
+      end
+    end
+    for group in pairs(require("hiraishin.keymaps").groups) do
+      if not reached[group] then
+        table.insert(out, "group " .. group)
+      end
+    end
+    table.sort(out)
+    return out
+  end)()]])
+  eq(problems, {})
 end
 
 T["docs"] = MiniTest.new_set()

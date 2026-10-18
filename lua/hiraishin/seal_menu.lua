@@ -138,6 +138,7 @@ function M.open()
     close(current)
   end
   local origin = vim.api.nvim_get_current_buf()
+  require("hiraishin.stats").ui_open("seal_menu")
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].filetype = "hiraishin_seals"
