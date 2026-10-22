@@ -126,22 +126,27 @@ function M.sync(bufnr)
   if not layer then
     return
   end
-  local list = active(store.get(layer.ctx))
+  local tracker = require("hiraishin.tracker")
+  local data = store.get(layer.ctx)
+  local list = active(data)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  local trimmed = tracker.lazy_trim(lines)
   local changed = false
-  for id, mark_id in pairs(layer.marks) do
-    local bm = list.bookmarks[id]
-    local row, invalid = mark_pos(bufnr, mark_id)
-    if bm and row and not invalid then
-      local line = row + 1
-      local fresh = anchor.capture(lines, line)
-      if line ~= bm.line or not vim.deep_equal(fresh, bm.anchor) then
-        bm.line, bm.anchor = line, fresh
-        changed = true
+  for _, bm in ipairs(list_ops.items(list, layer.ctx.file)) do
+    local mark_id = layer.marks[bm.id]
+    if mark_id or bm.stale then
+      local row, invalid
+      if mark_id then
+        row, invalid = mark_pos(bufnr, mark_id)
       end
-    elseif bm and invalid and not bm.stale then
-      bm.stale = true
-      changed = true
+      local c, replace = tracker.sync_one(bm, data.active_list, not invalid and row or nil, lines, trimmed)
+      changed = changed or c
+      if replace then
+        if mark_id then
+          pcall(vim.api.nvim_buf_del_extmark, bufnr, ns, mark_id)
+        end
+        place(bufnr, layer, list, bm, bm.line - 1)
+      end
     end
   end
   if changed then

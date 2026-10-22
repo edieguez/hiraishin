@@ -360,14 +360,7 @@ function M.toggle(opts)
   return bm, bm and "added" or nil, add_err
 end
 
----@param slot any
----@return string? slot key "1".."9"
-local function slot_key(slot)
-  local n = tonumber(slot)
-  if n and n >= 1 and n <= 9 and n == math.floor(n) then
-    return tostring(n)
-  end
-end
+local slot_key = list_ops.slot_key
 
 ---Change a bookmark's name, note or seal (slot). Pass `false` to clear a field.
 ---Giving a seal that another kunai holds moves the seal to this one.
@@ -693,6 +686,9 @@ function M.to_quickfix(opts)
   opts = opts or {}
   local picker = require("hiraishin.picker")
   local entries, ctx = picker.entries({ filter = opts.all and "all" or nil })
+  if #entries == 0 then
+    return 0 -- leave the quickfix list and the windows alone
+  end
   local data = store.get(ctx)
   picker.actions.quickfix(entries, {
     counted = true, -- the command or key already counted it
@@ -1175,6 +1171,8 @@ function M.rename(from, to)
       end
       if new_abs then
         local old_file = bm.file
+        -- so a merge with another Neovim keeps the new path
+        bm.updated_at = os.time()
         local dst = scope.for_path(new_abs)
         if dst.store == src.store then
           bm.file = dst.file

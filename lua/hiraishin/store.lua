@@ -81,14 +81,15 @@ local function write_atomic(path, content)
   return true
 end
 
----Bring decoded JSON into shape; returns nil when it is not hiraishin data.
----@return hiraishin.Data?
+---Bring decoded JSON into shape; returns nil when it is not hiraishin data,
+---or nil and "newer" when a newer hiraishin wrote it.
+---@return hiraishin.Data?, "newer"?
 local function normalize(data, root)
-  if type(data) ~= "table" or type(data.lists) ~= "table" then
+  if type(data) ~= "table" or type(data.lists) ~= "table" or type(data.version) ~= "number" then
     return nil
   end
-  if type(data.version) ~= "number" or data.version > M.VERSION then
-    return nil
+  if data.version > M.VERSION then
+    return nil, "newer"
   end
   data.version = M.VERSION
   data.root = data.root or root
@@ -138,18 +139,37 @@ local function normalize(data, root)
   return data
 end
 
+---@return hiraishin.Data?, "newer"?
+local function decode(content, root)
+  local ok, decoded = pcall(vim.json.decode, content or "", { luanil = { object = true, array = true } })
+  if not ok then
+    return nil
+  end
+  return normalize(decoded, root)
+end
+
+local function warn_newer(path)
+  util.notify(
+    string.format("%s was written by a newer hiraishin · it is left untouched until you update", path),
+    vim.log.levels.WARN
+  )
+end
+
 ---@param path string
 ---@param root string?
----@return hiraishin.Data
+---@return hiraishin.Data data, boolean? readonly the file is from a newer hiraishin: never write it
 local function load(path, root)
   local content = read_file(path)
   if not content or content == "" then
     return new_data(root)
   end
-  local ok, decoded = pcall(vim.json.decode, content, { luanil = { object = true, array = true } })
-  local data = ok and normalize(decoded, root) or nil
+  local data, why = decode(content, root)
   if data then
     return data
+  end
+  if why == "newer" then
+    warn_newer(path)
+    return new_data(root), true
   end
   local backup = string.format("%s.corrupt-%d", path, os.time())
   vim.uv.fs_rename(path, backup)
@@ -168,7 +188,8 @@ function M.get(ctx)
     if ctx.fork_from and not vim.uv.fs_stat(ctx.store) and vim.uv.fs_stat(ctx.fork_from) then
       source = ctx.fork_from
     end
-    entry = { data = load(source, ctx.root), dirty = false, mtime = mtime_of(ctx.store), root = ctx.root }
+    local data, readonly = load(source, ctx.root)
+    entry = { data = data, readonly = readonly, dirty = false, mtime = mtime_of(ctx.store), root = ctx.root }
     cache[ctx.store] = entry
     -- kunai whose file is gone are stale until the file shows up again
     for _, list in pairs(entry.data.lists) do
@@ -328,12 +349,21 @@ local function save(path)
   if not entry or not entry.dirty then
     return true
   end
+  if entry.readonly then
+    entry.dirty = false
+    return true
+  end
   local merged = false
   local disk = mtime_of(path)
-  if disk and entry.mtime and disk ~= entry.mtime and entry.base then
-    local content = read_file(path)
-    local ok_dec, decoded = pcall(vim.json.decode, content or "", { luanil = { object = true, array = true } })
-    local theirs = ok_dec and normalize(decoded, entry.root) or nil
+  -- no mtime: the file did not exist when we read it, so anything there now
+  -- was written by another Neovim (merged against our empty start)
+  if disk and disk ~= entry.mtime and entry.base then
+    local theirs, why = decode(read_file(path), entry.root)
+    if why == "newer" then
+      entry.readonly, entry.dirty = true, false
+      warn_newer(path)
+      return true
+    end
     if theirs then
       local result = M.merge(entry.base, entry.data, theirs)
       -- update in place: callers hold on to entry.data
@@ -407,8 +437,8 @@ function M.reload_changed()
   for path, entry in pairs(cache) do
     local now = mtime_of(path)
     if now and now ~= entry.mtime and not entry.dirty then
-      local data = load(path, entry.root)
-      entry.data = data
+      local data, readonly = load(path, entry.root)
+      entry.data, entry.readonly = data, readonly
       entry.base = vim.deepcopy(data)
       entry.mtime = now
       reloaded[path] = true

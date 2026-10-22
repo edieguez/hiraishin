@@ -123,6 +123,16 @@ T["remove / update"]["renames, clears and protects names"] = function()
   eq(child.lua_get([[require("hiraishin").get("b").note]]), vim.NIL)
 end
 
+T["remove / update"]["seal numbers can't be names: jump 3 means seal 3"] = function()
+  main_lua(1)
+  eq(child.lua_get([[select(2, require("hiraishin").add({ name = "3" }))]]), "Names 1-9 are seal numbers")
+  eq(child.lua_get([[select(2, require("hiraishin").add({ name = "05" }))]]), "Names 1-9 are seal numbers")
+  child.lua([[require("hiraishin").add({ name = "a" })]])
+  eq(child.lua_get([[select(2, require("hiraishin").update("a", { name = "7" }))]]), "Names 1-9 are seal numbers")
+  child.lua([[require("hiraishin").update("a", { name = "10" })]])
+  eq(child.lua_get([[require("hiraishin").get("10").line]]), 1)
+end
+
 T["events"] = function()
   child.lua([[
     _G.events = {}

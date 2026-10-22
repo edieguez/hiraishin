@@ -252,6 +252,53 @@ T["merge"]["changes from another Neovim are merged on save"] = function()
   eq(#child.lua_get([[vim.api.nvim_buf_get_extmarks(0, require("hiraishin.signs").ns, 0, -1, {})]]), 2)
 end
 
+-- Another Neovim creates the store file of the current buffer with one
+-- kunai "theirs" (and `version`, default 1).
+local function external_create(version)
+  child.lua(
+    [[
+    local ctx = require("hiraishin.scope").for_buf(0)
+    vim.fn.mkdir(vim.fs.dirname(ctx.store), "p")
+    vim.fn.writefile({ vim.json.encode({ version = ..., root = ctx.root, active_list = "default", lists = { default = {
+      order = { "cccccccc" }, slots = vim.empty_dict(), bookmarks = { cccccccc = { id = "cccccccc", file = "src/main.lua",
+        line = 7, col = 0, name = "theirs", anchor = { text = "return M" }, created_at = 1, updated_at = 1 } } } } }) },
+      ctx.store)
+  ]],
+    { version or 1 }
+  )
+end
+local function on_disk()
+  return child.lua_get([[(function()
+    local ctx = require("hiraishin.scope").for_buf(0)
+    return vim.json.decode(table.concat(vim.fn.readfile(ctx.store), "\n"))
+  end)()]])
+end
+
+T["merge"]["the first save of a new store keeps what another Neovim wrote meanwhile"] = function()
+  child.edit(child.T("proj_a") .. "/src/main.lua", 1) -- store loaded, no file yet
+  eq(child.lua_get([[vim.uv.fs_stat(require("hiraishin.scope").for_buf(0).store) == nil]]), true)
+  external_create()
+  local ours = child.lua_get([[require("hiraishin").add({ name = "ours" }).id]])
+  eq(on_disk().lists.default.order, { ours, "cccccccc" })
+end
+
+T["merge"]["a store from a newer hiraishin is never overwritten or set aside"] = function()
+  -- written while this Neovim has the store open
+  child.edit(child.T("proj_a") .. "/src/main.lua", 1)
+  external_create(99)
+  child.lua([[require("hiraishin").add({ name = "ours" })]])
+  eq(on_disk().version, 99)
+  eq(on_disk().lists.default.order, { "cccccccc" })
+  -- found when the store is read
+  child.lua([[require("hiraishin.store").reset(); require("hiraishin.tracker").attach(0)]])
+  expect.no_equality(child.lua_get([[require("hiraishin.ui").last()]]):find("newer hiraishin", 1, true), nil)
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  child.lua([[require("hiraishin").add({ name = "ours2" })]])
+  child.lua([[require("hiraishin.store").flush()]])
+  eq(on_disk().lists.default.order, { "cccccccc" })
+  eq(child.lua_get([[#vim.fn.glob(T.storage .. "/**/*.corrupt-*", false, true)]]), 0)
+end
+
 T["merge"]["the newer edit wins when both sides changed a kunai"] = function()
   child.edit(child.T("proj_a") .. "/src/main.lua", 1)
   local a = child.lua_get([[require("hiraishin").add({ name = "a" }).id]])

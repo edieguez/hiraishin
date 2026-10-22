@@ -68,8 +68,20 @@ function M.find_name(list, name, except_id)
   end
 end
 
+---The seal ("1".."9") a value stands for: `jump 3`, `jump 05` and seal 3.0
+---all mean seal 3.
+---@param v any
+---@return string?
+function M.slot_key(v)
+  local n = tonumber(v)
+  if n and n >= 1 and n <= 9 and n == math.floor(n) then
+    return tostring(n)
+  end
+end
+
 ---Why a name can't be used, or nil when it can: it must be unique in the
----list and must not contain "│" (the manager's column separator) or a newline.
+---list, must not be a seal number (`jump 3` means seal 3) and must not
+---contain "│" (the manager's column separator) or a newline.
 ---@param list hiraishin.List
 ---@param name string
 ---@param except_id? string
@@ -77,6 +89,9 @@ end
 function M.name_problem(list, name, except_id)
   if name:find("│", 1, true) or name:find("\n", 1, true) then
     return "Kunai names can't contain │ or line breaks"
+  end
+  if M.slot_key(name) then
+    return "Names 1-9 are seal numbers"
   end
   if M.find_name(list, name, except_id) then
     return string.format("A kunai named '%s' already exists", name)

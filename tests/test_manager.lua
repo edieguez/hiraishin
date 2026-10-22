@@ -261,6 +261,17 @@ T["apply"]["names can't contain │"] = function()
   )
 end
 
+T["apply"]["names can't be seal numbers"] = function()
+  main_lua()
+  place(3, "ok")
+  child.cmd("Hiraishin manager")
+  local id = lines()[1]:match("/(%x+)$")
+  set_lines({ "- │ 3 │ src/main.lua:3 │ /" .. id })
+  child.cmd("write")
+  eq(problems(), { { 1, "name '3' is a seal number; names 1-9 are not allowed" } })
+  eq(child.lua_get([[require("hiraishin").get("ok").line]]), 3)
+end
+
 T["live"] = MiniTest.new_set()
 
 T["live"]["an open manager shows changes made elsewhere"] = function()

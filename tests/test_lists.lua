@@ -357,6 +357,25 @@ T["global kunai"]["are found again after outside changes"] = function()
   eq(global_signs(), { ["4"] = "🌐" })
 end
 
+T["global kunai"]["come back on write when their text is restored, like project kunai"] = function()
+  main_lua(3)
+  child.cmd("Hiraishin global")
+  child.lua([[_G.moved = 0
+    vim.api.nvim_create_autocmd("User", { pattern = "HiraishinMoved", callback = function() _G.moved = _G.moved + 1 end })]])
+  child.type_keys("d", "d")
+  child.cmd("write")
+  local _, bm = next(global_store().lists.default.bookmarks)
+  eq(bm.stale, true)
+  -- type the line back somewhere else
+  child.api.nvim_buf_set_lines(0, 5, 5, false, { "function M.hello()" })
+  child.cmd("write")
+  _, bm = next(global_store().lists.default.bookmarks)
+  eq({ bm.stale, bm.line }, { false, 6 })
+  child.lua([[vim.wait(50)]])
+  eq(global_signs(), { ["6"] = "🌐" })
+  eq(child.lua_get("_G.moved"), 1)
+end
+
 T["global kunai"]["picker, jump, manager and undo"] = function()
   main_lua(3)
   child.lua([[require("hiraishin").add({ global = true, name = "everywhere" })]])

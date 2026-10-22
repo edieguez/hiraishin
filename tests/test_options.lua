@@ -304,6 +304,80 @@ T["stats"]["count features, how they were reached, and dead ends"] = function()
   eq(raw:find("nope", 1, true), nil)
 end
 
+T["stats"]["templates drop paths"] = function()
+  local tpl = function(msg)
+    return child.lua_get([[require("hiraishin.stats").template(...)]], { msg })
+  end
+  eq(
+    tpl("could not read /Users/me/client/p.json; moved it to ~/p.json.corrupt-17 and started fresh"),
+    "could not read …; moved it to … and started fresh"
+  )
+  eq(tpl("/Users/me/acme/.hiraishin should return a table"), "… should return a table")
+end
+
+T["stats"]["every dead end matches a message the plugin really shows"] = function()
+  child.lua([[vim.fn.writefile({ "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" }, T.proj_a .. "/ten.txt")]])
+  child.edit(child.T("proj_a") .. "/ten.txt", 1)
+  child.lua([[vim.ui.select = function() error("the picker should not open") end]])
+  for _, cmd in ipairs({
+    "undo",
+    "jump 3",
+    "next seal",
+    "camp go",
+    "next",
+    "next list",
+    "delete",
+    "pick",
+    "jump nope",
+    "list delete nope",
+    "quickfix",
+    "camp",
+    "camp go",
+  }) do
+    child.cmd("Hiraishin " .. cmd)
+  end
+  for n = 1, 9 do
+    child.api.nvim_win_set_cursor(0, { n + 1, 0 })
+    child.cmd("Hiraishin seal " .. n)
+  end
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.cmd("Hiraishin seal")
+  -- not reachable from commands (they wrap around): only through the API
+  local returned = child.lua_get([[(function()
+    local h = require("hiraishin")
+    vim.api.nvim_win_set_cursor(0, { 10, 0 })
+    local below = select(2, h.next({ wrap = false }))
+    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+    return { below, (select(2, h.prev({ wrap = false }))) }
+  end)()]])
+  child.api.nvim_win_set_cursor(0, { 5, 0 })
+  child.cmd("Hiraishin add gone")
+  child.cmd("bwipeout!")
+  child.lua([[os.remove(T.proj_a .. "/ten.txt")]])
+  child.cmd("Hiraishin jump gone")
+
+  local unmatched = child.lua_get(
+    [[(function(returned)
+    local stats = require("hiraishin.stats")
+    local msgs = vim.tbl_map(function(m) return m.msg end, require("hiraishin.ui").history)
+    vim.list_extend(msgs, returned)
+    local out = {}
+    for _, d in ipairs(stats.DEAD_ENDS) do
+      local hit = false
+      for _, m in ipairs(msgs) do
+        hit = hit or stats.dead_end(stats.template(m)) == d
+      end
+      if not hit then
+        table.insert(out, d.pattern)
+      end
+    end
+    return out
+  end)(...)]],
+    { returned }
+  )
+  eq(unmatched, {})
+end
+
 T["stats"]["survive flushes and add up across instances"] = function()
   setup({ stats = true })
   main_lua(3)

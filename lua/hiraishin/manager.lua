@@ -193,6 +193,9 @@ function M.parse(lines, list)
           seen_slot[row.slot] = lnum
         end
         if row.name then
+          if list_ops.slot_key(row.name) then
+            problem(lnum, string.format("name '%s' is a seal number; names 1-9 are not allowed", row.name))
+          end
           if seen_name[row.name] then
             problem(lnum, string.format("name '%s' is also on line %d", row.name, seen_name[row.name]))
           end

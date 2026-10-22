@@ -232,6 +232,70 @@ function M.detach(bufnr)
   tracked[bufnr] = nil
 end
 
+---Bring one kunai in line with the buffer being written. `row` is its live
+---mark's 0-based row, nil when its line is gone or it had no mark (stale).
+---Shared by project kunai and global kunai drawn in project buffers.
+---@param bm hiraishin.Bookmark
+---@param list_name string
+---@param row integer?
+---@param lines string[]
+---@param trimmed fun(): string[] trim_all(lines), computed on first need
+---@return boolean changed, boolean replace its mark must be placed anew
+function M.sync_one(bm, list_name, row, lines, trimmed)
+  if row then
+    local line = row + 1
+    local fresh = anchor.capture(lines, line)
+    if line == bm.line and not bm.stale and vim.deep_equal(fresh, bm.anchor) then
+      return false, false
+    end
+    local from = bm.line
+    bm.line, bm.anchor, bm.stale = line, fresh, false
+    if from ~= line then
+      events.emit("HiraishinMoved", {
+        bookmark = vim.deepcopy(bm),
+        list = list_name,
+        from = from,
+        method = "edit",
+        reason = "edit",
+      })
+    end
+    return true, false
+  end
+  -- the line is gone, or the kunai was stale: its text may have been typed,
+  -- pasted or restored elsewhere
+  local line = anchor.locate(lines, bm, config.options.anchor, trimmed())
+  if line then
+    local from = bm.line
+    bm.line, bm.anchor, bm.stale = line, anchor.capture(lines, line), false
+    if from ~= line then
+      events.emit("HiraishinMoved", {
+        bookmark = vim.deepcopy(bm),
+        list = list_name,
+        from = from,
+        method = "reanchor",
+        reason = "edit",
+      })
+    end
+    return true, true
+  elseif not bm.stale then
+    bm.stale = true
+    events.emit("HiraishinStale", { bookmark = vim.deepcopy(bm), list = list_name })
+    return true, false
+  end
+  return false, false
+end
+
+---trim_all(lines), computed on the first call.
+---@param lines string[]
+---@return fun(): string[]
+function M.lazy_trim(lines)
+  local trimmed ---@type string[]?
+  return function()
+    trimmed = trimmed or anchor.trim_all(lines)
+    return trimmed
+  end
+end
+
 ---Write live positions back to the store. Runs on BufWritePost.
 ---@param bufnr integer
 function M.sync(bufnr)
@@ -242,74 +306,28 @@ function M.sync(bufnr)
   end
   local data = store.get(t.ctx)
   local lines = buf_lines(bufnr)
-  local trimmed ---@type string[]?
-  local function trim_once()
-    trimmed = trimmed or anchor.trim_all(lines)
-    return trimmed
-  end
+  local trimmed = M.lazy_trim(lines)
   local changed = false
   for _, e in ipairs(entries(data, t.ctx.file)) do
     local bm, mark_id = e.bm, t.marks[e.bm.id]
-    if mark_id then
-      local row, invalid = mark_pos(bufnr, mark_id)
-      if invalid or not row then
-        -- the line is gone; its text may have been typed or pasted elsewhere
-        local line = anchor.locate(lines, bm, config.options.anchor, trim_once())
-        if line then
-          pcall(vim.api.nvim_buf_del_extmark, bufnr, ns, mark_id)
-          t.marks[bm.id] = nil
-          local from = bm.line
-          bm.line, bm.anchor, bm.stale = line, anchor.capture(lines, line), false
+    if mark_id or bm.stale then
+      local row, invalid, end_row
+      if mark_id then
+        row, invalid, end_row = mark_pos(bufnr, mark_id)
+        row = not invalid and row or nil
+      end
+      if row and bm.end_line then
+        local end_line = end_row and end_row + 1 or nil
+        end_line = end_line and end_line > row + 1 and end_line or nil
+        if end_line ~= bm.end_line then
+          bm.end_line = end_line
           changed = true
-          place(bufnr, data, e)
-          if from ~= line then
-            events.emit("HiraishinMoved", {
-              bookmark = vim.deepcopy(bm),
-              list = e.name,
-              from = from,
-              method = "reanchor",
-              reason = "edit",
-            })
-          end
-        elseif not bm.stale then
-          bm.stale = true
-          changed = true
-          events.emit("HiraishinStale", { bookmark = vim.deepcopy(bm), list = e.name })
-        end
-      else
-        local line = row + 1
-        local fresh = anchor.capture(lines, line)
-        if bm.end_line then
-          local _, _, end_row = mark_pos(bufnr, mark_id)
-          local end_line = end_row and end_row + 1 or nil
-          end_line = end_line and end_line > line and end_line or nil
-          if end_line ~= bm.end_line then
-            bm.end_line = end_line
-            changed = true
-          end
-        end
-        if line ~= bm.line or bm.stale or not vim.deep_equal(fresh, bm.anchor) then
-          local from = bm.line
-          bm.line, bm.anchor, bm.stale = line, fresh, false
-          changed = true
-          if from ~= line then
-            events.emit("HiraishinMoved", {
-              bookmark = vim.deepcopy(bm),
-              list = e.name,
-              from = from,
-              method = "edit",
-              reason = "edit",
-            })
-          end
         end
       end
-    elseif bm.stale then
-      -- the text may be back (typed again, pasted, restored from git)
-      local line = anchor.locate(lines, bm, config.options.anchor, trim_once())
-      if line then
-        bm.line, bm.anchor, bm.stale = line, anchor.capture(lines, line), false
-        changed = true
-        place(bufnr, data, e)
+      local c, replace = M.sync_one(bm, e.name, row, lines, trimmed)
+      changed = changed or c
+      if replace then
+        place(bufnr, data, e) -- drops the old mark
       end
     end
   end

@@ -3,6 +3,23 @@
 Versions are git tags (`git checkout v0.6.0`). Dates are when the version
 was tagged.
 
+## Unreleased
+
+Fixes from a repo audit.
+
+- Two Neovims opening a new project (or a new branch in branch scope) no
+  longer lose each other's kunai: the first save of a new store now merges
+  with what the other one wrote
+- A store written by a newer hiraishin is left untouched (not moved aside
+  as corrupt, not overwritten) until you update
+- A file rename made while another Neovim edits the same kunai keeps the new
+  path after the merge
+- Names 1-9 are refused (also in the manager): `jump 3` always means seal 3
+- Global kunai drawn in a project come back on write when their text is
+  restored, and fire `HiraishinMoved` / `HiraishinStale`, like project kunai
+- Stats templates drop paths, so a warning that names a file keeps no path
+- `:Hiraishin quickfix` with no kunai no longer opens an empty quickfix window
+
 ## v0.12.0 — 2026-10-18
 
 The stats report now does the triage for you.

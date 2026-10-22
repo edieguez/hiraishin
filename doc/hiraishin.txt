@@ -112,7 +112,8 @@ All commands are subcommands of `:Hiraishin`, with completion.
 :[range]Hiraishin add [name]                                  *:Hiraishin-add*
 :[range]Hiraishin! add
     Place a kunai, named if given. With ! prompt for the name, suggesting
-    the enclosing function. On a line with a kunai, renames it.
+    the enclosing function. On a line with a kunai, renames it. Names are
+    unique per list; 1-9 are not allowed, since `jump 3` means seal 3.
 
 :Hiraishin delete [name]                                   *:Hiraishin-delete*
     Remove the kunai on the cursor line, or the one with that name.

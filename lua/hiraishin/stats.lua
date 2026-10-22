@@ -521,12 +521,17 @@ function M.ui_open(name)
   schedule_flush()
 end
 
----A message as a template: what follows "·" or ":", quoted names and
+---A message as a template: what follows "·" or ":", paths, quoted names and
 ---numbers are dropped, so no file or kunai name is ever kept.
 ---@param msg string
 ---@return string
 function M.template(msg)
-  local t = msg:gsub("%s*·.*$", ""):gsub(": .*$", ": …"):gsub("'[^']*'", "'…'"):gsub("%d+", "N")
+  local t = msg:gsub("%s*·.*$", "")
+    :gsub(": .*$", ": …")
+    :gsub("^[~/][^%s;,]*", "…")
+    :gsub("(%s)[~/][^%s;,]*", "%1…")
+    :gsub("'[^']*'", "'…'")
+    :gsub("%d+", "N")
   return t
 end
 

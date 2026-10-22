@@ -311,6 +311,29 @@ T["renames"]["oil.nvim and mini.files events are followed"] = function()
   eq(kunai("hello").file, "src/mini.lua")
 end
 
+T["renames"]["a merge with another Neovim keeps the new path"] = function()
+  main_lua(3)
+  child.lua([[require("hiraishin").add({ name = "hello" })]])
+  child.lua([[
+    local store = require("hiraishin.store")
+    local ctx = require("hiraishin.scope").for_buf(0)
+    for _, bm in pairs(store.get(ctx).lists.default.bookmarks) do
+      bm.updated_at = 1
+    end
+    store.changed(ctx)
+    -- another Neovim edits the note after that
+    local disk = vim.json.decode(table.concat(vim.fn.readfile(ctx.store), "\n"))
+    for _, bm in pairs(disk.lists.default.bookmarks) do
+      bm.note, bm.updated_at = "theirs", os.time() - 5
+    end
+    vim.uv.sleep(20) -- a distinct mtime
+    vim.fn.writefile({ vim.json.encode(disk) }, ctx.store)
+    vim.uv.fs_rename(T.proj_a .. "/src/main.lua", T.proj_a .. "/src/moved.lua")
+    require("hiraishin").rename(T.proj_a .. "/src/main.lua", T.proj_a .. "/src/moved.lua")
+  ]])
+  eq(stored("hello").file, "src/moved.lua")
+end
+
 T["renames"]["moving into another project moves the kunai to its store"] = function()
   main_lua(3)
   child.lua([[require("hiraishin").add({ name = "hello" })]])
